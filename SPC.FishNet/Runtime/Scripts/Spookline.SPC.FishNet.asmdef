@@ -1,0 +1,17 @@
+{
+    "name": "Spookline.SPC.FishNet",
+    "rootNamespace": "Spookline.SPC.FishNet",
+    "references": [
+        "GUID:ce5535610b7d48b1bda626644b1f68b1",
+        "GUID:7c88a4a7926ee5145ad2dfa06f454c67"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

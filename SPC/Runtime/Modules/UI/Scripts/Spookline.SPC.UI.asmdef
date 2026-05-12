@@ -1,0 +1,20 @@
+{
+  "name": "Spookline.SPC.UI",
+  "rootNamespace": "Spookline.SPC.UI",
+  "references": [
+    "GUID:ce5535610b7d48b1bda626644b1f68b1",
+    "GUID:75469ad4d38634e559750d17036d5f7c",
+    "UniTask",
+    "HELIX.Widgets",
+    "HELIX"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}
