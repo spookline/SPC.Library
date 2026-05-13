@@ -1,6 +1,6 @@
 ﻿{
   "name": "com.spookline.spc.fishnet",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "displayName": "Spookline Core FishNet",
   "dependencies": {}
 }
