@@ -160,6 +160,10 @@ namespace Spookline.SPC.Audio {
         }
 
         public void SetFadeOut(float duration) {
+            if (!source) {
+                _fadeOut = false;
+                return;
+            }
             _fadeOutStart = source.clip.length - duration;
             _fadeOutEnd = source.clip.length;
             _fadeOut = true;
