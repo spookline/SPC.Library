@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
+using Cysharp.Threading.Tasks;
 using HELIX.Coloring;
 using HELIX.Coloring.Material;
 using HELIX.Extensions;
@@ -44,17 +46,36 @@ namespace Spookline.SPC.UI {
       }
 
 
-      public override Widget Build(BuildContext context) {
+      public PrimitiveBaseThemeComponent GetComponent(BuildContext context) {
+        if (!widget.isEditor)
+          return new PrimitiveBaseThemeComponent() {
+            colors = PrimitiveBaseTheme.Colors.Get(context),
+            spacing = PrimitiveBaseTheme.Spacing.Get(context),
+            typography = PrimitiveBaseTheme.Typography.Get(context),
+            radius = PrimitiveBaseTheme.Radius.Get(context),
+          };
+
         var colors = PrimitiveColorScheme.From(MaterialColors.Blue, Brightness.Dark);
         var spacing = new PrimitiveSpacingScheme { factor = 1f };
 
-        var primary = colors.primary.main;
+        return new PrimitiveBaseThemeComponent {
+          colors = colors,
+          spacing = spacing,
+          typography = new PrimitiveTypographyScheme { factor = 1f },
+          radius = new PrimitiveRadiusScheme { factor = 1f }
+        };
+      }
+
+      public override Widget Build(BuildContext context) {
+        var component = GetComponent(context);
+
+        var primary = component.colors.value.primary.main;
         var infoColor = Colors.Blue.Harmonize(primary);
         var warningColor = Colors.Yellow.Harmonize(primary);
         var errorColor = Colors.Red.Harmonize(primary);
         var successColor = Colors.Green.Harmonize(primary);
-        var weakColor = colors.surface.onMain.WithOpacity(0.5f);
-        var activeColor = colors.primary.main;
+        var weakColor = component.colors.value.surface.onMain.WithOpacity(0.5f);
+        var activeColor = component.colors.value.primary.main;
 
         var consoleStyle = new CommandInfoRichTextStyle {
           weak = weakColor.ToHex(),
@@ -64,20 +85,13 @@ namespace Spookline.SPC.UI {
         };
 
         return new HThemeProvider(
-          new List<ThemeComponent> {
-            new PrimitiveBaseThemeComponent {
-              colors = colors,
-              spacing = spacing,
-              typography = new PrimitiveTypographyScheme { factor = 1f },
-              radius = new PrimitiveRadiusScheme { factor = 1f }
-            }
-          },
+          new List<ThemeComponent> { component },
           modifiers: new Modifier[] {
-            new PaddingModifier(spacing.Space3),
-            new BackgroundStyleModifier(colors.surface.main),
+            new PaddingModifier(component.spacing.value.Space3),
+            new BackgroundStyleModifier(component.colors.value.surface.main),
             new TextStyleModifier(
               new TextStyle {
-                color = colors.surface.onMain,
+                color = component.colors.value.surface.onMain,
                 generator = TextGeneratorType.Standard
               }
             )
@@ -135,6 +149,8 @@ namespace Spookline.SPC.UI {
       public CommandSystem system;
       public string completionText;
       public string infoText;
+      public bool isExecuting;
+      public int historyIndex = -1;
 
 
       public override void InitState() {
@@ -143,9 +159,44 @@ namespace Spookline.SPC.UI {
 
         system = new CommandSystem();
         system.Register(new SpawnCommand());
+
+        mount.Element.RegisterCallback<KeyDownEvent>(
+          evt => {
+            if (evt.keyCode == KeyCode.DownArrow) {
+              var newIndex = Mathf.Max(historyIndex - 1, -1);
+              if (newIndex == historyIndex || historyIndex < 0) return;
+              historyIndex = newIndex;
+              HistoryChanged();
+              evt.StopPropagation();
+            } else if (evt.keyCode == KeyCode.UpArrow) {
+              if (controller.Value.Length > 0 && historyIndex < 0) return;
+              historyIndex = Mathf.Min(historyIndex + 1, ConsoleHistorySignalObserver.Instance.history.Count - 1);
+              HistoryChanged();
+              evt.StopPropagation();
+            }
+          },
+          TrickleDown.TrickleDown
+        );
+      }
+
+      public void HistoryChanged() {
+        if (historyIndex < 0) { controller.SetValue(""); } else {
+          var history = ConsoleHistorySignalObserver.Instance.history;
+          historyIndex = Mathf.Min(historyIndex, history.Count - 1);
+          controller.SetValue(historyIndex < 0 ? "" : history[historyIndex]);
+        }
+
+        SelectEnd();
+      }
+
+      public void SelectEnd() {
+        var unityField = consoleKey.Target.Element.Q<TextField>();
+        unityField.textSelection.cursorIndex = controller.Value.Length;
+        unityField.textSelection.selectIndex = controller.Value.Length;
       }
 
       private void OnChanged(string obj) {
+        if (isExecuting) return;
         if (obj.Contains("\t")) {
           var updated = obj.Replace("\t", "");
           controller.SetValue(updated);
@@ -159,17 +210,14 @@ namespace Spookline.SPC.UI {
           infoText = result.richInfoText ?? "";
           completionText = completionText.Trim();
           SetState();
-
-          var unityField = consoleKey.Target.Element.Q<TextField>();
-          unityField.textSelection.cursorIndex = controller.Value.Length;
-          unityField.textSelection.selectIndex = controller.Value.Length;
+          SelectEnd();
           return;
         }
 
         if (obj.Contains("\n")) {
           var updated = obj.Replace("\n", "").Trim();
           controller.SetValue(updated);
-          OnSubmitted(updated);
+          OnSubmitted(updated).Forget();
           return;
         }
 
@@ -199,36 +247,48 @@ namespace Spookline.SPC.UI {
       }
 
 
-      private void OnSubmitted(string obj) {
-        if (string.IsNullOrWhiteSpace(obj)) return;
-        ConsoleHistoryBuffer.Instance.Add(
-          new ConsoleLogEntry() {
-            type = ExtLogType.Input,
-            summary = obj,
-            message = obj
-          }
-        );
-        CommandResult result;
-        try { result = system.Execute(obj); } catch (Exception e) { result = CommandResult.Failed(e); }
-
-        if (result.success) {
-          if (result.hasMessage) {
-            ConsoleHistoryBuffer.Instance.Add(
-              new ConsoleLogEntry(result.message.ToStringNullable()) {
-                type = ExtLogType.Log,
-              }
-            );
-          }
-        } else {
+      private async UniTaskVoid OnSubmitted(string obj) {
+        if (isExecuting || string.IsNullOrWhiteSpace(obj)) return;
+        isExecuting = true;
+        try {
           ConsoleHistoryBuffer.Instance.Add(
-            new ConsoleLogEntry(result.message.ToStringNullable()) { type = ExtLogType.Error }
+            new ConsoleLogEntry {
+              type = ExtLogType.Input,
+              summary = obj,
+              message = obj
+            }
           );
-          Debug.LogError($"[SpookConsole] Failed: {result.message.ToStringNullable()}");
-        }
+          ConsoleHistorySignalObserver.Instance.AddToHistory(obj.Trim());
 
-        controller.SetValue("");
-        infoText = "";
-        completionText = "";
+          controller.SetValue("");
+          infoText = "";
+          completionText = "";
+          historyIndex = -1;
+          SetState();
+
+          CommandResult result;
+          try {
+            result = await system.Execute(obj)
+              .Timeout(TimeSpan.FromSeconds(5));
+          } catch (TimeoutException) { result = CommandResult.Failed("Command timed out after 5 seconds."); } catch
+            (Exception e) { result = CommandResult.Failed(e); }
+
+          if (result.success) {
+            if (result.hasMessage) {
+              ConsoleHistoryBuffer.Instance.Add(
+                new ConsoleLogEntry(result.message.ToStringNullable()) {
+                  type = ExtLogType.Log,
+                }
+              );
+            }
+          } else {
+            ConsoleHistoryBuffer.Instance.Add(
+              new ConsoleLogEntry(result.message.ToStringNullable()) { type = ExtLogType.Error }
+            );
+            Debug.LogError($"[SpookConsole] Failed: {result.message.ToStringNullable()}");
+          }
+        } finally { isExecuting = false; }
+
         SetState();
       }
 
@@ -245,7 +305,7 @@ namespace Spookline.SPC.UI {
         var colors = PrimitiveBaseTheme.Colors.Get(context);
         var radius = PrimitiveBaseTheme.Radius.Get(context);
         var spacing = PrimitiveBaseTheme.Spacing.Get(context);
-        var textStyleInfo = new TextStyle() {
+        var textStyleInfo = new TextStyle {
           fontSize = typo.FontSize2,
           color = colors.surface.onMain,
           wrap = WhiteSpace.Normal,
@@ -269,7 +329,12 @@ namespace Spookline.SPC.UI {
               new HText(completionText, enableRichText: true, key: "CompletionText").Caption(context),
             }
           },
-          new HTextField(key: consoleKey, controller: controller, multiline: true, style: style),
+          new HTextField(
+            key: consoleKey,
+            controller: controller,
+            multiline: true,
+            style: style
+          )
         };
       }
 
@@ -373,7 +438,7 @@ namespace Spookline.SPC.UI {
             new TextStyleModifier(
               new TextStyle { generator = TextGeneratorType.Standard, color = color }
             ),
-            new ManipulatorModifier(new Clickable(() => { widget.selectedEntry.Value = entry; })),
+            new ManipulatorModifier(BuildLogClickManipulator(entry)),
             new PaddingModifier(EdgeInsets.Symmetric(4f, 2f)),
           }
         ) {
@@ -382,6 +447,27 @@ namespace Spookline.SPC.UI {
           }.Size(16f),
           new HText(entry.summary).Expand().Caption(ctx)
         };
+      }
+
+      private Clickable BuildLogClickManipulator(ConsoleLogEntry entry) {
+        var manipulator = new Clickable(evt => {
+            if (evt is IPointerEvent { ctrlKey: true }) {
+              GUIUtility.systemCopyBuffer = entry.GetFullText().Trim();
+              return;
+            }
+
+            widget.selectedEntry.Value = entry;
+          }
+        ) {
+          activators = {
+            new ManipulatorActivationFilter { button = MouseButton.LeftMouse },
+            new ManipulatorActivationFilter {
+              button = MouseButton.LeftMouse,
+              modifiers = EventModifiers.Control
+            }
+          }
+        };
+        return manipulator;
       }
 
     }
@@ -466,7 +552,7 @@ namespace Spookline.SPC.UI {
             new HButton(
               HButtonVariant.Ghost,
               size: HButtonSize.Small,
-              onClick: () => { GUIUtility.systemCopyBuffer = widget.entry.GetFullText(); }
+              onClick: () => { GUIUtility.systemCopyBuffer = widget.entry.GetFullText().Trim(); }
             ) {
               new HIcon(FaSolidIcons.Copy, FaSolidIcons.FontDefinition)
             },
@@ -492,9 +578,17 @@ namespace Spookline.SPC.UI {
 
     private IDisposable _subscription;
 
+    public List<string> history = new();
+
     public void Resubscribe() {
       _subscription?.Dispose();
       _subscription = Evt<LogMessageReceivedEvt>.Subscribe(OnLogMessageReceivedEvent);
+    }
+
+    public void AddToHistory(string message) {
+      if (history.Contains(message)) history.Remove(message);
+      if (history.Count >= 50) history.RemoveAt(history.Count - 1);
+      history.Insert(0, message);
     }
 
     private void OnLogMessageReceivedEvent(ref LogMessageReceivedEvt args) {

@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Globalization;
 using System.Text;
+using Cysharp.Threading.Tasks;
 using UnityEngine;
 
 namespace Spookline.SPC {
@@ -121,7 +122,8 @@ namespace Spookline.SPC {
         Arguments(_destination, _rotation);
       }
 
-      public override CommandResult Execute(CommandContext context) {
+      public override async UniTask<CommandResult> ExecuteAsync(CommandContext context) {
+        await UniTask.Delay(1000); // Simulate some async work
         return CommandResult.Successful($"Teleporting to {_destination[context]} with rotation {_rotation[context]}");
       }
 

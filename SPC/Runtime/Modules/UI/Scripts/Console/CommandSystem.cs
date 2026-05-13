@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Text;
+using Cysharp.Threading.Tasks;
 using UnityEngine;
 
 namespace Spookline.SPC {
@@ -718,7 +719,13 @@ namespace Spookline.SPC {
     }
 
 
-    public abstract CommandResult Execute(CommandContext context);
+    public virtual UniTask<CommandResult> ExecuteAsync(CommandContext context) {
+      return UniTask.FromResult(Execute(context));
+    }
+
+    public virtual CommandResult Execute(CommandContext context) {
+      return CommandResult.Failed("Command not implemented");
+    }
 
     public virtual string GetShortHelp(
       CommandInfoRichTextStyle style = null,
@@ -778,7 +785,7 @@ namespace Spookline.SPC {
 
     public void Register(Command cmd) => _commands.Add(cmd);
 
-    public CommandResult Execute(string input) {
+    public async UniTask<CommandResult> Execute(string input) {
       try {
         var tokens = Tokenize(input);
         if (tokens.Count == 0) return CommandResult.Failed("Empty command");
@@ -852,7 +859,7 @@ namespace Spookline.SPC {
           }
         }
 
-        return current.Execute(context);
+        return await current.ExecuteAsync(context);
       } catch (Exception e) { return CommandResult.Failed(e.Message); }
     }
 
