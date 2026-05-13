@@ -28,12 +28,10 @@ namespace Spookline.SPC {
   public struct CompletionResult {
 
     public readonly List<string> completionItems;
-    public readonly string infoText;
     public readonly string richInfoText;
 
-    public CompletionResult(List<string> items, string info = null, string richInfo = null) {
+    public CompletionResult(List<string> items, string richInfo = null) {
       completionItems = items ?? new List<string>();
-      infoText = info;
       richInfoText = richInfo;
     }
 
@@ -48,6 +46,7 @@ namespace Spookline.SPC {
     private Dictionary<Argument, object> _values = new();
 
     public bool HasValue(Argument arg) => _values.ContainsKey(arg);
+    public object GetRawValue(Argument arg) => _values.GetValueOrDefault(arg);
     public void SetValue(Argument arg, object value) => _values[arg] = value;
     public T GetValue<T>(Argument<T> arg) => _values.TryGetValue(arg, out var val) ? (T)val : arg.DefaultValue;
 
@@ -62,6 +61,7 @@ namespace Spookline.SPC {
     public abstract bool IsFlag { get; }
     public abstract bool IsNamed { get; }
     public abstract bool IsList { get; }
+    public virtual object Combine(object oldValue, object newValue) => newValue;
 
     public abstract object Parse(string input);
     public abstract List<string> GetCompletions(string input);
@@ -97,6 +97,7 @@ namespace Spookline.SPC {
   }
 
   public class CommandInfoRichTextStyle {
+
     public static readonly CommandInfoRichTextStyle Default = new();
 
     public string error = "#FF0000";
@@ -135,18 +136,15 @@ namespace Spookline.SPC {
 
   }
 
-  public abstract class NameableArgument<T> : Argument<T>, IModifyableArgument {
+  public abstract class NameableArgument<T> : Argument<T> {
 
     protected NameableArgument(string name, string description, T defaultValue = default, bool isRequired = false) :
       base(name, description, defaultValue, isRequired) { }
 
   }
 
-  public interface ILeafArgument { }
 
-  public interface IModifyableArgument { }
-
-  public abstract class LeafArgument<T> : NameableArgument<T>, ILeafArgument {
+  public abstract class LeafArgument<T> : NameableArgument<T> {
 
     protected LeafArgument(string name, string description, T defaultValue = default, bool isRequired = false) : base(
       name,
@@ -158,6 +156,7 @@ namespace Spookline.SPC {
   }
 
   public static class ArgumentExtensions {
+
     public static ArgumentPreset<LeafArgument<string>, string> String(
       this ArgumentPreset preset,
       string defaultValue = null
@@ -331,7 +330,7 @@ namespace Spookline.SPC {
       if (!string.IsNullOrEmpty(currentValue)) return help;
 
       if (Min.HasValue || Max.HasValue) {
-        string range = "(";
+        var range = "(";
         if (Min.HasValue) range += Min.Value.ToString(CultureInfo.InvariantCulture);
         range += "..";
         if (Max.HasValue) range += Max.Value.ToString(CultureInfo.InvariantCulture);
@@ -443,7 +442,7 @@ namespace Spookline.SPC {
 
   }
 
-  public class FlagArgument : Argument<bool>, IModifyableArgument {
+  public class FlagArgument : Argument<bool> {
 
     public override string Prefix => "-";
     public override bool IsFlag => true;
@@ -470,7 +469,7 @@ namespace Spookline.SPC {
 
   }
 
-  public class NamedArgument<T> : Argument<T>, IModifyableArgument {
+  public class NamedArgument<T> : Argument<T> {
 
     public override string Prefix => "--";
     public override bool IsFlag => false;
@@ -488,6 +487,7 @@ namespace Spookline.SPC {
       _inner = inner;
     }
 
+    public override object Combine(object oldValue, object newValue) => _inner.Combine(oldValue, newValue);
     public override object Parse(string input) => _inner.Parse(input);
     public override List<string> GetCompletions(string input) => _inner.GetCompletions(input);
 
@@ -518,6 +518,16 @@ namespace Spookline.SPC {
       foreach (var part in parts) { result.Add((T)_elementArg.Parse(part)); }
 
       return result;
+    }
+
+    public override object Combine(object oldValue, object newValue) {
+      if (oldValue is List<T> oldList && newValue is List<T> newList) {
+        var combined = new List<T>(oldList);
+        combined.AddRange(newList);
+        return combined;
+      }
+
+      return newValue;
     }
 
     public override List<string> GetCompletions(string input) {
@@ -613,7 +623,7 @@ namespace Spookline.SPC {
 
       return new ArgumentPreset<Argument<bool>, bool>(
         new ArgumentPreset(name, description),
-       argument
+        argument
       );
     }
 
@@ -625,7 +635,7 @@ namespace Spookline.SPC {
     protected void Arguments(Argument arg) {
       // Positional arguments must be at the start
       if (!arg.IsFlag && !arg.IsNamed && string.IsNullOrEmpty(arg.Prefix)) {
-        int firstNonPos = AllArguments.FindIndex(a => a.IsFlag || a.IsNamed || !string.IsNullOrEmpty(a.Prefix));
+        var firstNonPos = AllArguments.FindIndex(a => a.IsFlag || a.IsNamed || !string.IsNullOrEmpty(a.Prefix));
         if (firstNonPos != -1) {
           throw new InvalidOperationException(
             $"Positional argument '{arg.Name}' cannot be registered after named arguments or flags in command '{Name}'."
@@ -657,12 +667,13 @@ namespace Spookline.SPC {
       HashSet<Argument> malformedArgs = null,
       string errorSuffix = null
     ) {
+      style ??= CommandInfoRichTextStyle.Default;
       var fullName = string.IsNullOrEmpty(parentPath) ? Name : $"{parentPath} {Name}";
       var sb = new StringBuilder(fullName);
 
       if (AllChildren.Count > 0 && atSubcommand) {
-        string subText = $"[{string.Join("|", AllChildren.Select(s => s.Name))}]";
-        if (activeArg == null) { subText = $"<b><color=#FFFF00>{subText}</color></b>"; }
+        var subText = $"[{string.Join("|", AllChildren.Select(s => s.Name))}]";
+        if (activeArg == null) { subText = $"<b><color={style.weak}>{subText}</color></b>"; }
 
         sb.Append(" ").Append(subText);
       }
@@ -670,11 +681,11 @@ namespace Spookline.SPC {
       foreach (var arg in AllArguments) {
         string val = null;
         values?.TryGetValue(arg, out val);
-        bool isMalformed = malformedArgs != null && malformedArgs.Contains(arg);
+        var isMalformed = malformedArgs != null && malformedArgs.Contains(arg);
         sb.Append(" ").Append(arg.GetShortHelp(style, val, arg == activeArg, isMalformed));
       }
 
-      if (!string.IsNullOrEmpty(errorSuffix)) { sb.Append(" <color=#FF0000>!").Append(errorSuffix).Append("</color>"); }
+      if (!string.IsNullOrEmpty(errorSuffix)) { sb.Append($" <color={style.active}>!").Append(errorSuffix).Append("</color>"); }
 
       return sb.ToString();
     }
@@ -708,10 +719,10 @@ namespace Spookline.SPC {
         var tokens = Tokenize(input);
         if (tokens.Count == 0) return CommandResult.Failed("Empty command");
 
-        Command current = _commands.Find(c => c.Name.Equals(tokens[0], StringComparison.OrdinalIgnoreCase));
+        var current = _commands.Find(c => c.Name.Equals(tokens[0], StringComparison.OrdinalIgnoreCase));
         if (current == null) return CommandResult.Failed($"Unknown command: {tokens[0]}");
 
-        int tokenIdx = 1;
+        var tokenIdx = 1;
         while (tokenIdx < tokens.Count) {
           var sub = current.AllChildren.Find(s => s.Name.Equals(
               tokens[tokenIdx],
@@ -729,11 +740,11 @@ namespace Spookline.SPC {
         var namedArgs = current.AllArguments.Where(a => a.IsFlag || a.IsNamed || !string.IsNullOrEmpty(a.Prefix))
           .ToList();
 
-        int posIdx = 0;
+        var posIdx = 0;
         var usedTokens = new HashSet<int>();
 
         // Parse named args and flags first
-        for (int i = tokenIdx; i < tokens.Count; i++) {
+        for (var i = tokenIdx; i < tokens.Count; i++) {
           var token = tokens[i];
           if (token.StartsWith("-") || token.StartsWith("--")) {
             var arg = namedArgs.Find(a => (a.Prefix + a.Name).Equals(
@@ -743,8 +754,15 @@ namespace Spookline.SPC {
             );
             if (arg != null) {
               usedTokens.Add(i);
-              if (arg.IsFlag) { context.SetValue(arg, true); } else if (i + 1 < tokens.Count) {
-                context.SetValue(arg, arg.Parse(tokens[i + 1]));
+              if (arg.IsFlag) {
+                var val = true;
+                if (context.HasValue(arg)) val = (bool)arg.Combine(context.GetRawValue(arg), true);
+                context.SetValue(arg, val);
+              } else if (i + 1 < tokens.Count) {
+                var newValue = arg.Parse(tokens[i + 1]);
+                if (context.HasValue(arg)) newValue = arg.Combine(context.GetRawValue(arg), newValue);
+
+                context.SetValue(arg, newValue);
                 usedTokens.Add(++i);
               } else { return CommandResult.Failed($"Missing value for argument: {token}"); }
             } else { return CommandResult.Failed($"Unknown argument or flag: {token}"); }
@@ -752,11 +770,13 @@ namespace Spookline.SPC {
         }
 
         // Parse positional args
-        for (int i = tokenIdx; i < tokens.Count; i++) {
+        for (var i = tokenIdx; i < tokens.Count; i++) {
           if (usedTokens.Contains(i)) continue;
           if (posIdx < positionalArgs.Count) {
             var arg = positionalArgs[posIdx++];
-            context.SetValue(arg, arg.Parse(tokens[i]));
+            var newValue = arg.Parse(tokens[i]);
+            if (context.HasValue(arg)) newValue = arg.Combine(context.GetRawValue(arg), newValue);
+            context.SetValue(arg, newValue);
             usedTokens.Add(i);
           } else { return CommandResult.Failed($"Unexpected argument: {tokens[i]}"); }
         }
@@ -780,10 +800,19 @@ namespace Spookline.SPC {
         return sb.ToString().TrimEnd();
       }
 
-      Command current = _commands.Find(c => c.Name.Equals(tokens[0], StringComparison.OrdinalIgnoreCase));
-      if (current == null) return $"Unknown command: {tokens[0]}";
+      var current = _commands.Find(c => c.Name.Equals(tokens[0], StringComparison.OrdinalIgnoreCase));
+      if (current == null) {
+        var matches = _commands
+          .Where(c => c.Name.Contains(tokens[0], StringComparison.OrdinalIgnoreCase))
+          .ToList();
+        if (matches.Count == 0) return $"No command matching: '{tokens[0]}'";
 
-      int tokenIdx = 1;
+        var sb = new StringBuilder($"Possible commands:\n");
+        foreach (var cmd in matches) sb.AppendLine($"  {cmd.Name}: {cmd.Description}");
+        return sb.ToString().TrimEnd();
+      }
+
+      var tokenIdx = 1;
       while (tokenIdx < tokens.Count) {
         var sub = current.AllChildren.Find(s => s.Name.Equals(
             tokens[tokenIdx],
@@ -798,24 +827,12 @@ namespace Spookline.SPC {
       return current.GetLongHelp(style ?? CommandInfoRichTextStyle.Default);
     }
 
-    private class DummyArg : Argument<object> {
-
-      public override string Prefix => "";
-      public override bool IsFlag => false;
-      public override bool IsNamed => false;
-      public override bool IsList => false;
-      public DummyArg(Argument a) : base(a.Name, a.Description) { }
-      public override object Parse(string input) => input;
-      public override List<string> GetCompletions(string input) => new();
-
-    }
-
     public CompletionResult Complete(string input, CommandInfoRichTextStyle style = null) {
       style ??= CommandInfoRichTextStyle.Default;
 
       try {
         var tokens = Tokenize(input);
-        bool endsWithSpace = input.EndsWith(" ") && input.Length > 0 && input[^1] != '\\';
+        var endsWithSpace = input.EndsWith(" ") && input.Length > 0 && input[^1] != '\\';
 
         if (tokens.Count == 0 || (tokens.Count == 1 && !endsWithSpace)) {
           var search = tokens.Count == 0 ? "" : tokens[0];
@@ -824,12 +841,12 @@ namespace Spookline.SPC {
           return new CompletionResult(cmds);
         }
 
-        Command current = _commands.Find(c => c.Name.Equals(tokens[0], StringComparison.OrdinalIgnoreCase));
+        var current = _commands.Find(c => c.Name.Equals(tokens[0], StringComparison.OrdinalIgnoreCase));
         if (current == null) return new CompletionResult(new List<string>());
 
         var pathBuilder = new StringBuilder();
 
-        int tokenIdx = 1;
+        var tokenIdx = 1;
         while (tokenIdx < tokens.Count - (endsWithSpace ? 0 : 1)) {
           var sub = current.AllChildren.Find(s => s.Name.Equals(
               tokens[tokenIdx],
@@ -845,7 +862,7 @@ namespace Spookline.SPC {
           tokenIdx++;
         }
 
-        string parentPath = pathBuilder.ToString();
+        var parentPath = pathBuilder.ToString();
 
         // If we are at a subcommand name
         if (!endsWithSpace && tokenIdx < tokens.Count) {
@@ -875,7 +892,7 @@ namespace Spookline.SPC {
         var usedTokens = new HashSet<int>();
 
         // 1. Identify named arguments/flags and their values
-        for (int i = tokenIdx; i < tokens.Count - (endsWithSpace ? 0 : 1); i++) {
+        for (var i = tokenIdx; i < tokens.Count - (endsWithSpace ? 0 : 1); i++) {
           var t = tokens[i];
           if (t.StartsWith("-") || t.StartsWith("--")) {
             var arg = namedArgs.Find(a => (a.Prefix + a.Name).Equals(t, StringComparison.OrdinalIgnoreCase)
@@ -898,8 +915,8 @@ namespace Spookline.SPC {
         }
 
         // 2. Identify positional arguments
-        int posIdx = 0;
-        for (int i = tokenIdx; i < tokens.Count - (endsWithSpace ? 0 : 1); i++) {
+        var posIdx = 0;
+        for (var i = tokenIdx; i < tokens.Count - (endsWithSpace ? 0 : 1); i++) {
           if (usedTokens.Contains(i)) continue;
           if (posIdx < positionalArgs.Count) {
             var arg = positionalArgs[posIdx++];
@@ -940,7 +957,7 @@ namespace Spookline.SPC {
           prioritizedCompletions.AddRange(vals);
         } else {
           // Suggest subcommands and named arguments
-          bool canSuggestSubcommands = usedTokens.Count == 0 && posIdx == 0;
+          var canSuggestSubcommands = usedTokens.Count == 0 && posIdx == 0;
           if (canSuggestSubcommands) {
             prioritizedCompletions.AddRange(
               current.AllChildren
@@ -971,8 +988,8 @@ namespace Spookline.SPC {
         completions.AddRange(prioritizedCompletions.Distinct());
         completions.AddRange(otherCompletions.Distinct().Except(completions));
 
-        bool atSubcommand = usedTokens.Count == 0 && posIdx == 0;
-        string richInfo = current.GetShortHelp(
+        var atSubcommand = usedTokens.Count == 0 && posIdx == 0;
+        var richInfo = current.GetShortHelp(
           style,
           providedValues,
           activeArg,
@@ -983,15 +1000,15 @@ namespace Spookline.SPC {
         );
         if (!string.IsNullOrEmpty(argInfo)) { richInfo = argInfo + "\n" + richInfo; }
 
-        return new CompletionResult(completions.ToList(), richInfo, richInfo);
+        return new CompletionResult(completions.ToList(), richInfo);
       } catch { return new CompletionResult(new List<string>()); }
     }
 
     public static List<string> Tokenize(string input) {
       var result = new List<string>();
       var current = new StringBuilder();
-      bool escaped = false;
-      bool inQuotes = false;
+      var escaped = false;
+      var inQuotes = false;
       foreach (var c in input) {
         if (escaped) {
           current.Append(c);
@@ -1012,8 +1029,8 @@ namespace Spookline.SPC {
     public static List<string> SplitList(string input) {
       var result = new List<string>();
       var current = new StringBuilder();
-      bool escaped = false;
-      bool inQuotes = false;
+      var escaped = false;
+      var inQuotes = false;
       foreach (var c in input) {
         if (escaped) {
           current.Append(c);
@@ -1029,130 +1046,5 @@ namespace Spookline.SPC {
       return result;
     }
 
-  }
-
-  // --- EXAMPLE IMPLEMENTATION ---
-
-  public enum EntityType {
-
-    Orc,
-    Goblin,
-    Dragon
-
-  }
-
-  public class SpawnCommand : Command {
-
-    public override string Name => "spawn";
-    public override string Description => "Spawns an entity at a location.";
-
-    private readonly Argument<EntityType> _type = Argument(
-      name: "type",
-      description: "The type of entity to spawn"
-    ).Enum<EntityType>();
-
-    private readonly Argument<string> _name = Optional(
-      name: "name",
-      description: "The name of the entity to spawn"
-    ).String("Unnamed");
-
-    private readonly Argument<int> _amount = Optional(
-      name: "amount",
-      description: "Amount of entities to spawn"
-    ).Int(1);
-
-    private readonly Argument<float> _scale = Optional(
-      name: "scale",
-      description: "Scale of the entity"
-    ).Float(1f, min: 0.1f, max: 10f);
-
-    private readonly Argument<Vector3> _position = Optional(
-      name: "pos",
-      description: "Position to spawn at"
-    ).Vec3(Vector3.zero);
-
-    private readonly Argument<List<string>> _tags = Named(
-      name: "tags",
-      description: "A list of tags to apply to the entity"
-    ).String().List();
-
-    private readonly Argument<List<string>> _modifiers = Optional(
-      name: "mod",
-      description: "Modifiers for the entity"
-    ).String().List();
-
-    private readonly Argument<bool> _silent = Flag("silent", "If true, no message will be shown");
-
-    public SpawnCommand() {
-      Arguments(_type, _name, _amount, _scale, _position, _modifiers, _silent, _tags);
-      Subcommands(new InfoSubcommand(), new ConfigSubcommand(), new TeleportSubcommand());
-    }
-
-    public override CommandResult Execute(CommandContext context) {
-      var tags = _tags[context];
-      var mods = _modifiers[context];
-
-      var sb = new StringBuilder();
-      sb.Append($"Spawning {_amount[context]}x {_type[context]} named '{_name[context]}'");
-      sb.Append($" at {_position[context]} with scale {_scale[context]}");
-      if (mods.Count > 0) sb.Append($" with modifiers: {string.Join(" and ", mods)}");
-      if (tags.Count > 0) sb.Append($" and tags: {string.Join(" and ", tags)}");
-      if (_silent[context]) sb.Append(" (silently)");
-
-      return CommandResult.Successful(sb.ToString());
-    }
-
-    private class InfoSubcommand : Command {
-
-      public override string Name => "info";
-      public override string Description => "Shows info about spawning.";
-
-      public override CommandResult Execute(CommandContext context) {
-        return CommandResult.Successful("Spawn command allows you to create entities in the world.");
-      }
-
-    }
-
-    private class ConfigSubcommand : Command {
-
-      public override string Name => "config";
-      public override string Description => "Configures spawn settings.";
-
-      private readonly Argument<string> _key =
-        Argument("key", "The config key").String();
-      private readonly Argument<float> _speed =
-        Named("speed", "A speed multiplier").Float(1f);
-
-      private readonly Argument<bool> _verbose = Flag("verbose", "If true, more info will be shown");
-
-      public ConfigSubcommand() {
-        Arguments(_key, _speed, _verbose);
-      }
-
-      public override CommandResult Execute(CommandContext context) {
-        var message = $"Config updated: {_key[context]} = " +
-                      $"{_speed[context].ToString(CultureInfo.InvariantCulture)} " +
-                      $"(Verbose: {_verbose[context]})";
-        return CommandResult.Successful(message);
-      }
-
-    }
-
-    private class TeleportSubcommand : Command {
-
-      public override string Name => "tp";
-      public override string Description => "Teleports to a location.";
-
-      private readonly Argument<Vector3> _destination = Argument("dest", "Destination position").Vec3();
-      private readonly Argument<Vector2> _rotation = Optional("rot", "Rotation (pitch,yaw)").Vec2();
-
-      public TeleportSubcommand() {
-        Arguments(_destination, _rotation);
-      }
-
-      public override CommandResult Execute(CommandContext context) {
-        return CommandResult.Successful($"Teleporting to {_destination[context]} with rotation {_rotation[context]}");
-      }
-    }
   }
 }

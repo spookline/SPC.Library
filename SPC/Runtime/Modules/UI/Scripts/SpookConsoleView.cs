@@ -155,7 +155,7 @@ namespace Spookline.SPC.UI {
             completionText = string.Join(" ", result.completionItems.ToArray());
           }
 
-          infoText = result.richInfoText ?? result.infoText;
+          infoText = result.richInfoText ?? "";
           completionText = completionText.Trim();
           SetState();
 
@@ -180,7 +180,7 @@ namespace Spookline.SPC.UI {
         }
 
         var lateResult = system.Complete(obj, widget.style);
-        infoText = lateResult.richInfoText ?? lateResult.infoText;
+        infoText = lateResult.richInfoText ?? "";
         completionText = "";
         SetState();
       }
