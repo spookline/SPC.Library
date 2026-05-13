@@ -1,7 +1,9 @@
 using System.Collections.Generic;
+using System.Linq;
 using Sirenix.OdinInspector;
 using Spookline.SPC.Draw;
 using Spookline.SPC.Events;
+using UnityEngine;
 
 namespace Spookline.SPC {
     public partial class Globals {
@@ -54,6 +56,19 @@ namespace Spookline.SPC {
             else SetDebugFlag(flag);
         }
 
+        private void SetupLogMessageReceiver() {
+            var buffer = ConsoleHistoryBuffer.Instance;
+            Application.logMessageReceived += OnLogMessageReceived;
+        }
+
+        public void TeardownLogMessageReceiver() {
+            Application.logMessageReceived -= OnLogMessageReceived;
+        }
+
+        private void OnLogMessageReceived(string condition, string stackTrace, LogType type) {
+            ConsoleHistoryBuffer.Instance.AddLogMessage(condition, stackTrace, type);
+        }
+
     }
 
     public struct DebugFlagsChangedEvt : Evt<DebugFlagsChangedEvt> {
@@ -71,6 +86,76 @@ namespace Spookline.SPC {
 
         public readonly bool HasFlag(string flag) => flags.Contains(flag);
         public readonly bool HasFlagOrDebugging(string flag) => HasFlag(flag) || debugging;
+
+    }
+
+    public class ConsoleHistoryBuffer  {
+
+        public static ConsoleHistoryBuffer Instance { get; } = new();
+
+        public readonly List<ConsoleLogEntry> messages = new(100);
+        public int maxMessages = 100;
+
+        public void AddLogMessage(string message, string stackTrace, LogType type) {
+            // Prepare summary from the first two lines of the message
+            var summary = string.Join("\n", message.Split('\n', 3).Take(2).Select(s => {
+                if (s.Length > 128) return s[..128].TrimEnd() + "...";
+                return s.Trim();
+            }));
+
+            var entry = new ConsoleLogEntry {
+                summary = summary,
+                message = message,
+                stackTrace = stackTrace,
+                type = LogTypeToExtLogType(type)
+            };
+            Add(entry);
+        }
+
+        public void Add(ConsoleLogEntry entry) {
+            if (messages.Count >= maxMessages) messages.RemoveAt(0);
+            messages.Add(entry);
+            new LogMessageReceivedEvt { entry = entry }.RaiseSafe();
+        }
+
+        private static ExtLogType LogTypeToExtLogType(LogType type) {
+            return type switch {
+                LogType.Log => ExtLogType.Log,
+                LogType.Warning => ExtLogType.Warning,
+                LogType.Error => ExtLogType.Error,
+                LogType.Assert => ExtLogType.Assert,
+                LogType.Exception => ExtLogType.Exception,
+                _ => ExtLogType.Log
+            };
+        }
+
+    }
+
+    public struct LogMessageReceivedEvt : Evt<LogMessageReceivedEvt> {
+
+        public ConsoleLogEntry entry;
+
+    }
+
+    public struct ConsoleLogEntry {
+
+        public string summary;
+        public string message;
+        public string stackTrace;
+        public ExtLogType type;
+
+        public string GetFullText() => $"{message}\n\n{stackTrace}";
+
+    }
+
+    public enum ExtLogType {
+
+        Log,
+        Warning,
+        Error,
+        Assert,
+        Exception,
+        Input
 
     }
 }

@@ -25,6 +25,7 @@ namespace Spookline.SPC {
         private void Awake() {
             Instance = this;
             Debugging = GetEnvironmentDebugging();
+            SetupLogMessageReceiver();
 
             DontDestroyOnLoad(gameObject);
             ModdingEntrypoint();
@@ -40,6 +41,7 @@ namespace Spookline.SPC {
         private void OnDestroy() {
             foreach (var module in modules) module.Unload();
 
+            TeardownLogMessageReceiver();
             Instance = null;
             Started = false;
         }
