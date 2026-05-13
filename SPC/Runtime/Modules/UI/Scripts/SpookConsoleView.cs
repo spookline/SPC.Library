@@ -5,6 +5,7 @@ using HELIX.Coloring.Material;
 using HELIX.Extensions;
 using HELIX.Types;
 using HELIX.Widgets;
+using HELIX.Widgets.Diagnostics;
 using HELIX.Widgets.Modifiers;
 using HELIX.Widgets.Scrolling;
 using HELIX.Widgets.Signals;
@@ -51,47 +52,59 @@ namespace Spookline.SPC.UI {
         var warningColor = Colors.Yellow.Harmonize(primary);
         var errorColor = Colors.Red.Harmonize(primary);
         var successColor = Colors.Green.Harmonize(primary);
+        var weakColor = colors.surface.onMain.WithOpacity(0.5f);
+        var activeColor = colors.primary.main;
+
+        var consoleStyle = new CommandInfoRichTextStyle {
+          weak = weakColor.ToHex(),
+          active = activeColor.ToHex(),
+          valid = successColor.ToHex(),
+          error = errorColor.ToHex(),
+        };
 
         return new HThemeProvider(
-            new List<ThemeComponent> {
-              new PrimitiveBaseThemeComponent {
-                colors = colors,
-                spacing = spacing,
-                typography = new PrimitiveTypographyScheme { factor = 1f },
-                radius = new PrimitiveRadiusScheme { factor = 1f }
-              }
-            },
-            modifiers: new Modifier[] {
-              new PaddingModifier(spacing.Space3),
-              new BackgroundStyleModifier(colors.surface.main),
-              new TextStyleModifier(new TextStyle {
+          new List<ThemeComponent> {
+            new PrimitiveBaseThemeComponent {
+              colors = colors,
+              spacing = spacing,
+              typography = new PrimitiveTypographyScheme { factor = 1f },
+              radius = new PrimitiveRadiusScheme { factor = 1f }
+            }
+          },
+          modifiers: new Modifier[] {
+            new PaddingModifier(spacing.Space3),
+            new BackgroundStyleModifier(colors.surface.main),
+            new TextStyleModifier(
+              new TextStyle {
                 color = colors.surface.onMain,
                 generator = TextGeneratorType.Standard
-              })
-            }
-          ) {
-            new HStack {
-              new HRow {
-                new SpookConsoleHistory(
-                  infoColor: infoColor,
-                  successColor: successColor,
-                  warningColor: warningColor,
-                  errorColor: errorColor,
-                  selectedEntry: selectedEntry
-                ).Fill(),
-                new LogMessageViewer(
-                  selectedEntry.Value ?? default,
-                  () => { selectedEntry.Value = null; },
-                  modifiers: new Modifier[] {
-                    new MarginModifier(EdgeInsets.Only(left: 8f)),
-                    new DisplayModifier(selectedEntry.Value.HasValue),
-                    new SizeModifier(BoxConstraints.Tight(50.Percent(), 100.Percent()))
-                  }
-                )
-              }.Positioned(EdgeInsets.Only(0, 0, 0, 32)),
-              new SpookConsoleCommandLine().Positioned(EdgeInsets.Only(bottom: 0, left: 0, right: 0))
-            }
-          };
+              }
+            )
+          }
+        ) {
+          new HStack {
+            new HRow {
+              new SpookConsoleHistory(
+                infoColor: infoColor,
+                successColor: successColor,
+                warningColor: warningColor,
+                errorColor: errorColor,
+                selectedEntry: selectedEntry
+              ).Fill(),
+              new LogMessageViewer(
+                selectedEntry.Value ?? default,
+                () => { selectedEntry.Value = null; },
+                modifiers: new Modifier[] {
+                  new MarginModifier(EdgeInsets.Only(left: 8f)),
+                  new DisplayModifier(selectedEntry.Value.HasValue),
+                  new SizeModifier(BoxConstraints.Tight(50.Percent(), 100.Percent()))
+                }
+              )
+            }.Positioned(EdgeInsets.Only(0, 0, 0, 32)),
+            new SpookConsoleCommandLine(consoleStyle)
+              .Positioned(EdgeInsets.Only(bottom: 0, left: 0, right: 0))
+          }
+        };
       }
 
     }
@@ -99,6 +112,18 @@ namespace Spookline.SPC.UI {
   }
 
   public class SpookConsoleCommandLine : StatefulWidget<SpookConsoleCommandLine> {
+
+    public CommandInfoRichTextStyle style;
+
+    public SpookConsoleCommandLine(
+      CommandInfoRichTextStyle style,
+      Key key = default,
+      object[] constants = null,
+      IReadOnlyCollection<Modifier> modifiers = null
+    ) : base(key, constants, modifiers) {
+      this.style = style;
+    }
+
 
     public override State<SpookConsoleCommandLine> CreateState() => new State();
 
@@ -125,7 +150,7 @@ namespace Spookline.SPC.UI {
           controller.SetValue(updated);
 
           completionText = "";
-          var result = system.Complete(updated);
+          var result = system.Complete(updated, widget.style);
           if (result.completionItems.Count == 1) { ReplaceCurrentToken(result.completionItems[0]); } else {
             completionText = string.Join(" ", result.completionItems.ToArray());
           }
@@ -154,7 +179,7 @@ namespace Spookline.SPC.UI {
           return;
         }
 
-        var lateResult = system.Complete(obj);
+        var lateResult = system.Complete(obj, widget.style);
         infoText = lateResult.richInfoText ?? lateResult.infoText;
         completionText = "";
         SetState();
@@ -175,16 +200,29 @@ namespace Spookline.SPC.UI {
 
       private void OnSubmitted(string obj) {
         if (string.IsNullOrWhiteSpace(obj)) return;
-        ConsoleHistoryBuffer.Instance.Add(new ConsoleLogEntry() {
-          type = ExtLogType.Input,
-          summary = obj,
-          message = obj
-        });
-        var result = system.Execute(obj);
+        ConsoleHistoryBuffer.Instance.Add(
+          new ConsoleLogEntry() {
+            type = ExtLogType.Input,
+            summary = obj,
+            message = obj
+          }
+        );
+        CommandResult result;
+        try { result = system.Execute(obj); } catch (Exception e) { result = CommandResult.Failed(e); }
+
         if (result.success) {
-          Debug.Log("[SpookConsole] Success!");
+          if (result.hasMessage) {
+            ConsoleHistoryBuffer.Instance.Add(
+              new ConsoleLogEntry(result.message.ToStringNullable()) {
+                type = ExtLogType.Log,
+              }
+            );
+          }
         } else {
-          Debug.LogError($"[SpookConsole] Failed: {result.error}");
+          ConsoleHistoryBuffer.Instance.Add(
+            new ConsoleLogEntry(result.message.ToStringNullable()) { type = ExtLogType.Error }
+          );
+          Debug.LogError($"[SpookConsole] Failed: {result.message.ToStringNullable()}");
         }
 
         controller.SetValue("");
@@ -398,23 +436,30 @@ namespace Spookline.SPC.UI {
           new HRow(crossAxisAlign: Align.FlexStart) {
             new HText("Log Message").Body(context),
             new HGap().Expand(),
-            new HButton(HButtonVariant.Ghost,
+            new HButton(
+              HButtonVariant.Ghost,
               size: HButtonSize.Small,
               selected: wrapLines,
-              onClick: SetState(() => wrapLines = !wrapLines)) {
+              onClick: SetState(() => wrapLines = !wrapLines)
+            ) {
               new HRow(gap: 4f) {
                 new HIcon(
                   FaSolidIcons.TextWidth,
                   FaSolidIcons.FontDefinition
                 ),
-                new HText("Wrap", style: new TextStyle() {
-                  style = FontStyle.Bold
-                })
+                new HText(
+                  "Wrap",
+                  style: new TextStyle() {
+                    style = FontStyle.Bold
+                  }
+                )
               }
             },
-            new HButton(HButtonVariant.Ghost, size: HButtonSize.Small, onClick: () => {
-              GUIUtility.systemCopyBuffer = widget.entry.GetFullText();
-            }) {
+            new HButton(
+              HButtonVariant.Ghost,
+              size: HButtonSize.Small,
+              onClick: () => { GUIUtility.systemCopyBuffer = widget.entry.GetFullText(); }
+            ) {
               new HIcon(FaSolidIcons.Copy, FaSolidIcons.FontDefinition)
             },
             new HButton(HButtonVariant.Ghost, onClick: widget.onClose, size: HButtonSize.Small) {

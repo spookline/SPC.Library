@@ -9,10 +9,19 @@ namespace Spookline.SPC {
   public struct CommandResult {
 
     public bool success;
-    public string error;
+    public bool hasMessage;
+    public object message;
 
-    public static CommandResult Successful() => new CommandResult { success = true };
-    public static CommandResult Failed(string error) => new CommandResult { success = false, error = error };
+    public static CommandResult Successful() => new() { success = true };
+
+    public static CommandResult Successful(object message) =>
+      new() {
+        success = true,
+        hasMessage = true,
+        message = message
+      };
+
+    public static CommandResult Failed(object error) => new() { success = false, hasMessage = true, message = error };
 
   }
 
@@ -42,16 +51,13 @@ namespace Spookline.SPC {
     public void SetValue(Argument arg, object value) => _values[arg] = value;
     public T GetValue<T>(Argument<T> arg) => _values.TryGetValue(arg, out var val) ? (T)val : arg.DefaultValue;
 
-    public List<T> GetListValue<T>(ListArgument<T> arg) =>
-      _values.TryGetValue(arg, out var val) ? (List<T>)val : new List<T>();
-
   }
 
   public abstract class Argument {
 
-    public string Name { get; protected set; }
-    public string Description { get; protected set; }
-    public bool IsRequired { get; protected set; }
+    public string Name { get; set; }
+    public string Description { get; set; }
+    public bool IsRequired { get; set; }
     public abstract string Prefix { get; }
     public abstract bool IsFlag { get; }
     public abstract bool IsNamed { get; }
@@ -61,6 +67,7 @@ namespace Spookline.SPC {
     public abstract List<string> GetCompletions(string input);
 
     public virtual string GetShortHelp(
+      CommandInfoRichTextStyle style,
       string currentValue = null,
       bool isActive = false,
       bool isMalformed = false
@@ -74,18 +81,28 @@ namespace Spookline.SPC {
       else display = $"[{name}]";
 
       if (!string.IsNullOrEmpty(currentValue)) {
-        var valColor = isMalformed ? "#FF0000" : "#00FF00";
+        var valColor = isMalformed ? style.error : style.valid;
         if (IsFlag) { display = $"<color={valColor}>{name}</color>"; } else {
-          display = $"<color=#808080>[{Name}]</color><color={valColor}>{currentValue}</color>";
+          display = $"<color={style.weak}>[{Name}]</color><color={valColor}>{currentValue}</color>";
         }
       }
 
-      if (isActive) { return $"<b><color=#FFFF00>{display}</color></b>"; }
+      if (isActive) { return $"<b><color={style.active}>{display}</color></b>"; }
 
       return display;
     }
 
-    public virtual string GetLongHelp() => $"{GetShortHelp()}: {Description}";
+    public virtual string GetLongHelp(CommandInfoRichTextStyle style) => $"{GetShortHelp(style)}: {Description}";
+
+  }
+
+  public class CommandInfoRichTextStyle {
+    public static readonly CommandInfoRichTextStyle Default = new();
+
+    public string error = "#FF0000";
+    public string active = "#FFFF00";
+    public string valid = "#00FF00";
+    public string weak = "#808080";
 
   }
 
@@ -100,9 +117,133 @@ namespace Spookline.SPC {
       IsRequired = isRequired;
     }
 
+    public virtual T Get(CommandContext context) {
+      return context.GetValue(this);
+    }
+
+    public virtual bool TryGet(CommandContext context, out T value) {
+      if (context.HasValue(this)) {
+        value = Get(context);
+        return true;
+      }
+
+      value = DefaultValue;
+      return false;
+    }
+
+    public T this[CommandContext context] => Get(context);
+
   }
 
-  public class StringArgument : Argument<string> {
+  public abstract class NameableArgument<T> : Argument<T>, IModifyableArgument {
+
+    protected NameableArgument(string name, string description, T defaultValue = default, bool isRequired = false) :
+      base(name, description, defaultValue, isRequired) { }
+
+  }
+
+  public interface ILeafArgument { }
+
+  public interface IModifyableArgument { }
+
+  public abstract class LeafArgument<T> : NameableArgument<T>, ILeafArgument {
+
+    protected LeafArgument(string name, string description, T defaultValue = default, bool isRequired = false) : base(
+      name,
+      description,
+      defaultValue,
+      isRequired
+    ) { }
+
+  }
+
+  public static class ArgumentExtensions {
+    public static ArgumentPreset<LeafArgument<string>, string> String(
+      this ArgumentPreset preset,
+      string defaultValue = null
+    ) {
+      return new ArgumentPreset<LeafArgument<string>, string>(
+        preset,
+        new StringArgument(preset.name, "", defaultValue)
+      );
+    }
+
+    public static ArgumentPreset<LeafArgument<int>, int> Int(
+      this ArgumentPreset preset,
+      int defaultValue = 0
+    ) {
+      return new ArgumentPreset<LeafArgument<int>, int>(preset, new IntArgument(preset.name, "", defaultValue));
+    }
+
+    public static ArgumentPreset<LeafArgument<float>, float> Float(
+      this ArgumentPreset preset,
+      float defaultValue = 0f,
+      float? min = null,
+      float? max = null
+    ) {
+      return new ArgumentPreset<LeafArgument<float>, float>(
+        preset,
+        new FloatArgument(preset.name, "", defaultValue, false, min, max)
+      );
+    }
+
+    public static ArgumentPreset<Argument<bool>, bool> Flag(
+      this ArgumentPreset preset,
+      string description = "",
+      bool invert = false,
+      bool addNoPrefix = true
+    ) {
+      if (invert && addNoPrefix)
+        return new ArgumentPreset<Argument<bool>, bool>(
+          preset,
+          new FlagArgument($"no-{preset.name}", description, true)
+        );
+      return new ArgumentPreset<Argument<bool>, bool>(preset, new FlagArgument(preset.name, description, invert));
+    }
+
+    public static ArgumentPreset<LeafArgument<Vector2>, Vector2> Vec2(
+      this ArgumentPreset preset,
+      Vector2 defaultValue = default
+    ) {
+      return new ArgumentPreset<LeafArgument<Vector2>, Vector2>(
+        preset,
+        new Vector2Argument(preset.name, "", defaultValue)
+      );
+    }
+
+    public static ArgumentPreset<LeafArgument<Vector3>, Vector3> Vec3(
+      this ArgumentPreset preset,
+      Vector3 defaultValue = default
+    ) {
+      return new ArgumentPreset<LeafArgument<Vector3>, Vector3>(
+        preset,
+        new Vector3Argument(preset.name, "", defaultValue)
+      );
+    }
+
+    public static ArgumentPreset<LeafArgument<T>, T> Enum<T>(
+      this ArgumentPreset preset,
+      T defaultValue = default
+    ) where T : struct, Enum {
+      return new ArgumentPreset<LeafArgument<T>, T>(
+        preset,
+        new EnumArgument<T>(preset.name, "", defaultValue)
+      );
+    }
+
+    public static ArgumentPreset<NameableArgument<List<T>>, List<T>> List<T>(
+      this ArgumentPreset<LeafArgument<T>, T> preset,
+      List<T> defaultValue = null
+    ) {
+      return new ArgumentPreset<NameableArgument<List<T>>, List<T>>(
+        preset.descriptor,
+        new ListArgument<T>(preset.argument, "", defaultValue: defaultValue)
+      );
+    }
+
+  }
+
+  public class StringArgument : LeafArgument<string> {
 
     public override string Prefix => "";
     public override bool IsFlag => false;
@@ -113,11 +254,11 @@ namespace Spookline.SPC {
       : base(name, description, defaultValue, isRequired) { }
 
     public override object Parse(string input) => input;
-    public override List<string> GetCompletions(string input) => new List<string>();
+    public override List<string> GetCompletions(string input) => new();
 
   }
 
-  public class IntArgument : Argument<int> {
+  public class IntArgument : LeafArgument<int> {
 
     public override string Prefix => "";
     public override bool IsFlag => false;
@@ -132,11 +273,11 @@ namespace Spookline.SPC {
       throw new ArgumentException($"Invalid integer value '{input}' for argument {Name}");
     }
 
-    public override List<string> GetCompletions(string input) => new List<string>();
+    public override List<string> GetCompletions(string input) => new();
 
   }
 
-  public class FloatArgument : Argument<float> {
+  public class FloatArgument : LeafArgument<float> {
 
     public override string Prefix => "";
     public override bool IsFlag => false;
@@ -178,14 +319,15 @@ namespace Spookline.SPC {
       throw new ArgumentException($"Invalid float value '{input}' for argument {Name}");
     }
 
-    public override List<string> GetCompletions(string input) => new List<string>();
+    public override List<string> GetCompletions(string input) => new();
 
     public override string GetShortHelp(
+      CommandInfoRichTextStyle style,
       string currentValue = null,
       bool isActive = false,
       bool isMalformed = false
     ) {
-      var help = base.GetShortHelp(currentValue, isActive, isMalformed);
+      var help = base.GetShortHelp(style, currentValue, isActive, isMalformed);
       if (!string.IsNullOrEmpty(currentValue)) return help;
 
       if (Min.HasValue || Max.HasValue) {
@@ -194,7 +336,7 @@ namespace Spookline.SPC {
         range += "..";
         if (Max.HasValue) range += Max.Value.ToString(CultureInfo.InvariantCulture);
         range += ")";
-        return help + "<color=#808080>" + range + "</color>";
+        return help + $"<color={style.weak}>" + range + "</color>";
       }
 
       return help;
@@ -202,7 +344,7 @@ namespace Spookline.SPC {
 
   }
 
-  public class Vector2Argument : Argument<Vector2> {
+  public class Vector2Argument : LeafArgument<Vector2> {
 
     public override string Prefix => "";
     public override bool IsFlag => false;
@@ -223,22 +365,23 @@ namespace Spookline.SPC {
       throw new ArgumentException($"Invalid Vector2 value '{input}' for argument {Name}. Expected format: 'x,y'");
     }
 
-    public override List<string> GetCompletions(string input) => new List<string>();
+    public override List<string> GetCompletions(string input) => new();
 
 
     public override string GetShortHelp(
+      CommandInfoRichTextStyle style,
       string currentValue = null,
       bool isActive = false,
       bool isMalformed = false
     ) {
-      var help = base.GetShortHelp(currentValue, isActive, isMalformed);
+      var help = base.GetShortHelp(style, currentValue, isActive, isMalformed);
       if (!string.IsNullOrEmpty(currentValue)) return help;
-      return help + "<color=#808080>Vec2</color>";
+      return help + $"<color={style.weak}>Vec2</color>";
     }
 
   }
 
-  public class Vector3Argument : Argument<Vector3> {
+  public class Vector3Argument : LeafArgument<Vector3> {
 
     public override string Prefix => "";
     public override bool IsFlag => false;
@@ -262,21 +405,22 @@ namespace Spookline.SPC {
       );
     }
 
-    public override List<string> GetCompletions(string input) => new List<string>();
+    public override List<string> GetCompletions(string input) => new();
 
     public override string GetShortHelp(
+      CommandInfoRichTextStyle style,
       string currentValue = null,
       bool isActive = false,
       bool isMalformed = false
     ) {
-      var help = base.GetShortHelp(currentValue, isActive, isMalformed);
+      var help = base.GetShortHelp(style, currentValue, isActive, isMalformed);
       if (!string.IsNullOrEmpty(currentValue)) return help;
-      return help + "<color=#808080>Vec3</color>";
+      return help + $"<color={style.weak}>Vec3</color>";
     }
 
   }
 
-  public class EnumArgument<T> : Argument<T> where T : struct, Enum {
+  public class EnumArgument<T> : LeafArgument<T> where T : struct, Enum {
 
     public override string Prefix => "";
     public override bool IsFlag => false;
@@ -299,30 +443,43 @@ namespace Spookline.SPC {
 
   }
 
-  public class FlagArgument : Argument<bool> {
+  public class FlagArgument : Argument<bool>, IModifyableArgument {
 
     public override string Prefix => "-";
     public override bool IsFlag => true;
     public override bool IsNamed => false;
     public override bool IsList => false;
+    public bool Invert { get; set; } = false;
 
-    public FlagArgument(string name, string description) : base(name, description, false, false) { }
+    public FlagArgument(string name, string description, bool invert = false) :
+      base(name, description, false, false) {
+      Invert = invert;
+    }
 
     public override object Parse(string input) => true;
-    public override List<string> GetCompletions(string input) => new List<string>();
+    public override List<string> GetCompletions(string input) => new();
+
+    public override bool Get(CommandContext context) {
+      return context.HasValue(this) != Invert;
+    }
+
+    public override bool TryGet(CommandContext context, out bool value) {
+      value = context.HasValue(this) != Invert;
+      return true;
+    }
 
   }
 
-  public class NamedArgument<T> : Argument<T> {
+  public class NamedArgument<T> : Argument<T>, IModifyableArgument {
 
     public override string Prefix => "--";
     public override bool IsFlag => false;
     public override bool IsNamed => true;
     public override bool IsList => false;
 
-    private readonly Argument<T> _inner;
+    private readonly NameableArgument<T> _inner;
 
-    public NamedArgument(Argument<T> inner) : base(
+    public NamedArgument(NameableArgument<T> inner) : base(
       inner.Name,
       inner.Description,
       inner.DefaultValue,
@@ -336,17 +493,22 @@ namespace Spookline.SPC {
 
   }
 
-  public class ListArgument<T> : Argument<List<T>> {
+  public class ListArgument<T> : NameableArgument<List<T>> {
 
     public override string Prefix => "";
     public override bool IsFlag => false;
     public override bool IsNamed => false;
     public override bool IsList => true;
 
-    private readonly Argument<T> _elementArg;
+    private readonly LeafArgument<T> _elementArg;
 
-    public ListArgument(Argument<T> elementArg, string description, bool isRequired = false)
-      : base(elementArg.Name, description, new List<T>(), isRequired) {
+    public ListArgument(
+      LeafArgument<T> elementArg,
+      string description,
+      bool isRequired = false,
+      List<T> defaultValue = null
+    )
+      : base(elementArg.Name, description, defaultValue ?? new List<T>(), isRequired) {
       _elementArg = elementArg;
     }
 
@@ -366,17 +528,104 @@ namespace Spookline.SPC {
 
   }
 
+  public readonly struct ArgumentPreset {
+
+    public readonly string name;
+    public readonly string description;
+    public readonly bool isRequired;
+    public readonly bool isNamed;
+
+    public ArgumentPreset(string name, string description, bool isRequired = false, bool isNamed = false) {
+      this.name = name;
+      this.description = description;
+      this.isRequired = isRequired;
+      this.isNamed = isNamed;
+    }
+
+  }
+
+  public readonly struct ArgumentPreset<T, V> where T : Argument<V> {
+
+    public readonly ArgumentPreset descriptor;
+    public readonly T argument;
+
+    public ArgumentPreset(ArgumentPreset descriptor, T argument) {
+      this.descriptor = descriptor;
+      this.argument = argument;
+    }
+
+    public static implicit operator Argument<V>(ArgumentPreset<T, V> preset) {
+      Argument<V> argument = preset.argument;
+      if (argument is FlagArgument) {
+        argument.Description = preset.descriptor.description;
+        return argument;
+      }
+
+      if (preset.descriptor.isNamed) {
+        if (preset.argument is NameableArgument<V> named) argument = new NamedArgument<V>(named);
+        else throw new InvalidOperationException("Argument is not nameable");
+      }
+
+      argument.IsRequired = preset.descriptor.isRequired;
+      argument.Description = preset.descriptor.description;
+      return argument;
+    }
+
+  }
+
   public abstract class Command {
+
+    protected static ArgumentPreset Argument(string name, string description = "") =>
+      new ArgumentPreset(
+        name,
+        description,
+        isRequired: true
+      );
+
+    protected static ArgumentPreset Optional(string name, string description = "") =>
+      new ArgumentPreset(
+        name,
+        description,
+        isRequired: false
+      );
+
+    public static ArgumentPreset Named(
+      string name,
+      string description = "",
+      bool isRequired = false
+    ) =>
+      new ArgumentPreset(
+        name,
+        description,
+        isRequired: isRequired,
+        isNamed: true
+      );
+
+    public static ArgumentPreset<Argument<bool>, bool> Flag(
+      string name,
+      string description = "",
+      bool invert = false,
+      bool addNoPrefix = true
+    ) {
+      FlagArgument argument;
+      if (invert && addNoPrefix) argument = new FlagArgument($"no-{name}", description, true);
+      else argument = new FlagArgument(name, description, invert);
+
+      return new ArgumentPreset<Argument<bool>, bool>(
+        new ArgumentPreset(name, description),
+       argument
+      );
+    }
 
     public abstract string Name { get; }
     public abstract string Description { get; }
-    public List<Argument> Arguments { get; } = new();
-    public List<Command> Subcommands { get; } = new();
+    public List<Argument> AllArguments { get; } = new();
+    public List<Command> AllChildren { get; } = new();
 
-    protected void Register(Argument arg) {
+    protected void Arguments(Argument arg) {
       // Positional arguments must be at the start
       if (!arg.IsFlag && !arg.IsNamed && string.IsNullOrEmpty(arg.Prefix)) {
-        int firstNonPos = Arguments.FindIndex(a => a.IsFlag || a.IsNamed || !string.IsNullOrEmpty(a.Prefix));
+        int firstNonPos = AllArguments.FindIndex(a => a.IsFlag || a.IsNamed || !string.IsNullOrEmpty(a.Prefix));
         if (firstNonPos != -1) {
           throw new InvalidOperationException(
             $"Positional argument '{arg.Name}' cannot be registered after named arguments or flags in command '{Name}'."
@@ -384,19 +633,23 @@ namespace Spookline.SPC {
         }
       }
 
-      Arguments.Add(arg);
+      AllArguments.Add(arg);
     }
 
-    protected void Register(params Argument[] args) {
-      foreach (var arg in args) Register(arg);
+    protected void Arguments(params Argument[] args) {
+      foreach (var arg in args) Arguments(arg);
     }
 
 
-    protected void RegisterSubcommand(Command cmd) => Subcommands.Add(cmd);
+    protected void Subcommands(params Command[] cmd) {
+      AllChildren.AddRange(cmd);
+    }
+
 
     public abstract CommandResult Execute(CommandContext context);
 
     public virtual string GetShortHelp(
+      CommandInfoRichTextStyle style = null,
       Dictionary<Argument, string> values = null,
       Argument activeArg = null,
       bool atSubcommand = false,
@@ -407,18 +660,18 @@ namespace Spookline.SPC {
       var fullName = string.IsNullOrEmpty(parentPath) ? Name : $"{parentPath} {Name}";
       var sb = new StringBuilder(fullName);
 
-      if (Subcommands.Count > 0 && atSubcommand) {
-        string subText = $"[{string.Join("|", Subcommands.Select(s => s.Name))}]";
+      if (AllChildren.Count > 0 && atSubcommand) {
+        string subText = $"[{string.Join("|", AllChildren.Select(s => s.Name))}]";
         if (activeArg == null) { subText = $"<b><color=#FFFF00>{subText}</color></b>"; }
 
         sb.Append(" ").Append(subText);
       }
 
-      foreach (var arg in Arguments) {
+      foreach (var arg in AllArguments) {
         string val = null;
         values?.TryGetValue(arg, out val);
         bool isMalformed = malformedArgs != null && malformedArgs.Contains(arg);
-        sb.Append(" ").Append(arg.GetShortHelp(val, arg == activeArg, isMalformed));
+        sb.Append(" ").Append(arg.GetShortHelp(style, val, arg == activeArg, isMalformed));
       }
 
       if (!string.IsNullOrEmpty(errorSuffix)) { sb.Append(" <color=#FF0000>!").Append(errorSuffix).Append("</color>"); }
@@ -426,17 +679,17 @@ namespace Spookline.SPC {
       return sb.ToString();
     }
 
-    public virtual string GetLongHelp() {
+    public virtual string GetLongHelp(CommandInfoRichTextStyle style) {
       var sb = new StringBuilder();
       sb.AppendLine($"{Name}: {Description}");
-      if (Arguments.Count > 0) {
+      if (AllArguments.Count > 0) {
         sb.AppendLine("Arguments:");
-        foreach (var arg in Arguments) sb.AppendLine($"  {arg.GetLongHelp()}");
+        foreach (var arg in AllArguments) sb.AppendLine($"  {arg.GetLongHelp(style)}");
       }
 
-      if (Subcommands.Count > 0) {
+      if (AllChildren.Count > 0) {
         sb.AppendLine("Subcommands:");
-        foreach (var sub in Subcommands) sb.AppendLine($"  {sub.Name}: {sub.Description}");
+        foreach (var sub in AllChildren) sb.AppendLine($"  {sub.Name}: {sub.Description}");
       }
 
       return sb.ToString().TrimEnd();
@@ -460,7 +713,7 @@ namespace Spookline.SPC {
 
         int tokenIdx = 1;
         while (tokenIdx < tokens.Count) {
-          var sub = current.Subcommands.Find(s => s.Name.Equals(
+          var sub = current.AllChildren.Find(s => s.Name.Equals(
               tokens[tokenIdx],
               StringComparison.OrdinalIgnoreCase
             )
@@ -471,9 +724,9 @@ namespace Spookline.SPC {
         }
 
         var context = new CommandContext { RawInput = input, Command = current };
-        var positionalArgs = current.Arguments
+        var positionalArgs = current.AllArguments
           .Where(a => !a.IsFlag && !a.IsNamed && string.IsNullOrEmpty(a.Prefix)).ToList();
-        var namedArgs = current.Arguments.Where(a => a.IsFlag || a.IsNamed || !string.IsNullOrEmpty(a.Prefix))
+        var namedArgs = current.AllArguments.Where(a => a.IsFlag || a.IsNamed || !string.IsNullOrEmpty(a.Prefix))
           .ToList();
 
         int posIdx = 0;
@@ -509,7 +762,7 @@ namespace Spookline.SPC {
         }
 
         // Check required
-        foreach (var arg in current.Arguments) {
+        foreach (var arg in current.AllArguments) {
           if (arg.IsRequired && !context.HasValue(arg)) {
             return CommandResult.Failed($"Missing required argument: {arg.Name}");
           }
@@ -519,7 +772,7 @@ namespace Spookline.SPC {
       } catch (Exception e) { return CommandResult.Failed(e.Message); }
     }
 
-    public string GetHelp(string input) {
+    public string GetHelp(string input, CommandInfoRichTextStyle style = null) {
       var tokens = Tokenize(input);
       if (tokens.Count == 0) {
         var sb = new StringBuilder("Available commands:\n");
@@ -532,7 +785,7 @@ namespace Spookline.SPC {
 
       int tokenIdx = 1;
       while (tokenIdx < tokens.Count) {
-        var sub = current.Subcommands.Find(s => s.Name.Equals(
+        var sub = current.AllChildren.Find(s => s.Name.Equals(
             tokens[tokenIdx],
             StringComparison.OrdinalIgnoreCase
           )
@@ -542,7 +795,7 @@ namespace Spookline.SPC {
         tokenIdx++;
       }
 
-      return current.GetLongHelp();
+      return current.GetLongHelp(style ?? CommandInfoRichTextStyle.Default);
     }
 
     private class DummyArg : Argument<object> {
@@ -553,11 +806,13 @@ namespace Spookline.SPC {
       public override bool IsList => false;
       public DummyArg(Argument a) : base(a.Name, a.Description) { }
       public override object Parse(string input) => input;
-      public override List<string> GetCompletions(string input) => new List<string>();
+      public override List<string> GetCompletions(string input) => new();
 
     }
 
-    public CompletionResult Complete(string input) {
+    public CompletionResult Complete(string input, CommandInfoRichTextStyle style = null) {
+      style ??= CommandInfoRichTextStyle.Default;
+
       try {
         var tokens = Tokenize(input);
         bool endsWithSpace = input.EndsWith(" ") && input.Length > 0 && input[^1] != '\\';
@@ -576,7 +831,7 @@ namespace Spookline.SPC {
 
         int tokenIdx = 1;
         while (tokenIdx < tokens.Count - (endsWithSpace ? 0 : 1)) {
-          var sub = current.Subcommands.Find(s => s.Name.Equals(
+          var sub = current.AllChildren.Find(s => s.Name.Equals(
               tokens[tokenIdx],
               StringComparison.OrdinalIgnoreCase
             )
@@ -595,7 +850,7 @@ namespace Spookline.SPC {
         // If we are at a subcommand name
         if (!endsWithSpace && tokenIdx < tokens.Count) {
           var search = tokens[tokenIdx];
-          var subs = current.Subcommands
+          var subs = current.AllChildren
             .Where(s => s.Name.StartsWith(search, StringComparison.OrdinalIgnoreCase))
             .Select(s => s.Name).ToList();
           if (subs.Count > 0) return new CompletionResult(subs);
@@ -613,9 +868,9 @@ namespace Spookline.SPC {
         string argInfo = null;
 
         // Simple parsing to find provided values
-        var namedArgs = current.Arguments.Where(a => a.IsFlag || a.IsNamed || !string.IsNullOrEmpty(a.Prefix))
+        var namedArgs = current.AllArguments.Where(a => a.IsFlag || a.IsNamed || !string.IsNullOrEmpty(a.Prefix))
           .ToList();
-        var positionalArgs = current.Arguments
+        var positionalArgs = current.AllArguments
           .Where(a => !a.IsFlag && !a.IsNamed && string.IsNullOrEmpty(a.Prefix)).ToList();
         var usedTokens = new HashSet<int>();
 
@@ -688,7 +943,7 @@ namespace Spookline.SPC {
           bool canSuggestSubcommands = usedTokens.Count == 0 && posIdx == 0;
           if (canSuggestSubcommands) {
             prioritizedCompletions.AddRange(
-              current.Subcommands
+              current.AllChildren
                 .Where(s => s.Name.StartsWith(lastToken, StringComparison.OrdinalIgnoreCase))
                 .Select(s => s.Name)
             );
@@ -718,6 +973,7 @@ namespace Spookline.SPC {
 
         bool atSubcommand = usedTokens.Count == 0 && posIdx == 0;
         string richInfo = current.GetShortHelp(
+          style,
           providedValues,
           activeArg,
           atSubcommand,
@@ -790,90 +1046,60 @@ namespace Spookline.SPC {
     public override string Name => "spawn";
     public override string Description => "Spawns an entity at a location.";
 
-    private readonly EnumArgument<EntityType> _type;
-    private readonly StringArgument _name;
-    private readonly IntArgument _amount;
-    private readonly FloatArgument _scale;
-    private readonly Vector3Argument _position;
-    private readonly FlagArgument _silent;
-    private readonly NamedArgument<string> _tags;
-    private readonly ListArgument<string> _modifiers;
+    private readonly Argument<EntityType> _type = Argument(
+      name: "type",
+      description: "The type of entity to spawn"
+    ).Enum<EntityType>();
+
+    private readonly Argument<string> _name = Optional(
+      name: "name",
+      description: "The name of the entity to spawn"
+    ).String("Unnamed");
+
+    private readonly Argument<int> _amount = Optional(
+      name: "amount",
+      description: "Amount of entities to spawn"
+    ).Int(1);
+
+    private readonly Argument<float> _scale = Optional(
+      name: "scale",
+      description: "Scale of the entity"
+    ).Float(1f, min: 0.1f, max: 10f);
+
+    private readonly Argument<Vector3> _position = Optional(
+      name: "pos",
+      description: "Position to spawn at"
+    ).Vec3(Vector3.zero);
+
+    private readonly Argument<List<string>> _tags = Named(
+      name: "tags",
+      description: "A list of tags to apply to the entity"
+    ).String().List();
+
+    private readonly Argument<List<string>> _modifiers = Optional(
+      name: "mod",
+      description: "Modifiers for the entity"
+    ).String().List();
+
+    private readonly Argument<bool> _silent = Flag("silent", "If true, no message will be shown");
 
     public SpawnCommand() {
-      _type = new EnumArgument<EntityType>("type", "The type of entity to spawn", EntityType.Orc, true);
-      _name = new StringArgument("name", "The name of the entity", "Unnamed");
-      _amount = new IntArgument("amount", "Amount to spawn", 1);
-      _scale = new FloatArgument("scale", "Scale of the entity", 1f, min: 0.1f, max: 10f);
-      _position = new Vector3Argument("pos", "Position to spawn at", Vector3.zero);
-      _silent = new FlagArgument("silent", "If true, no message will be shown");
-      _tags = new NamedArgument<string>(new StringArgument("tags", "Comma separated tags"));
-      _modifiers = new ListArgument<string>(
-        new StringArgument("mod", "List of modifiers"),
-        "Modifiers for the entity"
-      );
-
-      Register(_type);
-      Register(_name);
-      Register(_amount);
-      Register(_scale);
-      Register(_position);
-      Register(_modifiers);
-      Register(_silent);
-      Register(_tags);
-
-      RegisterSubcommand(new InfoSubcommand());
-      RegisterSubcommand(new ConfigSubcommand());
-      RegisterSubcommand(new TeleportSubcommand());
+      Arguments(_type, _name, _amount, _scale, _position, _modifiers, _silent, _tags);
+      Subcommands(new InfoSubcommand(), new ConfigSubcommand(), new TeleportSubcommand());
     }
 
     public override CommandResult Execute(CommandContext context) {
-      var type = context.GetValue(_type);
-      var name = context.GetValue(_name);
-      var amount = context.GetValue(_amount);
-      var scale = context.GetValue(_scale);
-      var pos = context.GetValue(_position);
-      var silent = context.GetValue(_silent);
-      var tags = context.GetValue(_tags);
-      var mods = context.GetListValue(_modifiers);
+      var tags = _tags[context];
+      var mods = _modifiers[context];
 
       var sb = new StringBuilder();
-      sb.Append($"Spawning {amount}x {type} named '{name}' at {pos} with scale {scale}");
-      if (mods.Count > 0) sb.Append($" with modifiers: {string.Join(", ", mods)}");
-      if (!string.IsNullOrEmpty(tags)) sb.Append($" and tags: {tags}");
-      if (silent) sb.Append(" (silently)");
+      sb.Append($"Spawning {_amount[context]}x {_type[context]} named '{_name[context]}'");
+      sb.Append($" at {_position[context]} with scale {_scale[context]}");
+      if (mods.Count > 0) sb.Append($" with modifiers: {string.Join(" and ", mods)}");
+      if (tags.Count > 0) sb.Append($" and tags: {string.Join(" and ", tags)}");
+      if (_silent[context]) sb.Append(" (silently)");
 
-      UnityEngine.Debug.Log(sb.ToString());
-      return CommandResult.Successful();
-    }
-
-    public static void RunExample() {
-      var system = new CommandSystem();
-      system.Register(new SpawnCommand());
-
-      // Normal usage
-      DebugLogResult(
-        system.Execute("spawn Orc \"Green Orc\" 1 1.5 0,10,0 -silent --tags \"tag1,tag2\" mod1,mod2")
-      );
-
-      // Literal with escaped quotes
-      DebugLogResult(system.Execute("spawn Goblin \"\\\"Fast\\\" Goblin\""));
-
-      // Subcommand with arguments
-      DebugLogResult(system.Execute("spawn config debug --speed 1.5 -verbose"));
-
-      // New Teleport Subcommand
-      DebugLogResult(system.Execute("spawn tp 10,0,10 45,90"));
-
-      // Error: unknown flag
-      DebugLogResult(system.Execute("spawn Dragon -unknown"));
-
-      // Error: too many positional
-      DebugLogResult(system.Execute("spawn Orc Name 1 1.0 0,0,0 Extra"));
-    }
-
-    private static void DebugLogResult(CommandResult result) {
-      if (result.success) UnityEngine.Debug.Log("Command executed successfully.");
-      else UnityEngine.Debug.LogError($"Command failed: {result.error}");
+      return CommandResult.Successful(sb.ToString());
     }
 
     private class InfoSubcommand : Command {
@@ -882,8 +1108,7 @@ namespace Spookline.SPC {
       public override string Description => "Shows info about spawning.";
 
       public override CommandResult Execute(CommandContext context) {
-        UnityEngine.Debug.Log("Spawn command allows you to create entities in the world.");
-        return CommandResult.Successful();
+        return CommandResult.Successful("Spawn command allows you to create entities in the world.");
       }
 
     }
@@ -893,29 +1118,22 @@ namespace Spookline.SPC {
       public override string Name => "config";
       public override string Description => "Configures spawn settings.";
 
-      private readonly StringArgument _key;
-      private readonly NamedArgument<float> _speed;
-      private readonly FlagArgument _verbose;
+      private readonly Argument<string> _key =
+        Argument("key", "The config key").String();
+      private readonly Argument<float> _speed =
+        Named("speed", "A speed multiplier").Float(1f);
+
+      private readonly Argument<bool> _verbose = Flag("verbose", "If true, more info will be shown");
 
       public ConfigSubcommand() {
-        _key = new StringArgument("key", "The config key", isRequired: true);
-        _speed = new NamedArgument<float>(new FloatArgument("speed", "The speed multiplier", 1.0f));
-        _verbose = new FlagArgument("verbose", "Enable verbose logging");
-
-        Register(_key);
-        Register(_speed);
-        Register(_verbose);
+        Arguments(_key, _speed, _verbose);
       }
 
       public override CommandResult Execute(CommandContext context) {
-        var key = context.GetValue(_key);
-        var speed = context.GetValue(_speed);
-        var verbose = context.GetValue(_verbose);
-
-        UnityEngine.Debug.Log(
-          $"Config updated: {key} = {speed.ToString(CultureInfo.InvariantCulture)} (Verbose: {verbose})"
-        );
-        return CommandResult.Successful();
+        var message = $"Config updated: {_key[context]} = " +
+                      $"{_speed[context].ToString(CultureInfo.InvariantCulture)} " +
+                      $"(Verbose: {_verbose[context]})";
+        return CommandResult.Successful(message);
       }
 
     }
@@ -925,30 +1143,16 @@ namespace Spookline.SPC {
       public override string Name => "tp";
       public override string Description => "Teleports to a location.";
 
-      private readonly Vector3Argument _destination = new(
-        "dest",
-        "Destination position",
-        isRequired: true
-      );
-
-      private readonly Vector2Argument _rotation = new(
-        "rot",
-        "Rotation (pitch, yaw)",
-        Vector2.zero
-      );
+      private readonly Argument<Vector3> _destination = Argument("dest", "Destination position").Vec3();
+      private readonly Argument<Vector2> _rotation = Optional("rot", "Rotation (pitch,yaw)").Vec2();
 
       public TeleportSubcommand() {
-        Register(_destination, _rotation);
+        Arguments(_destination, _rotation);
       }
 
       public override CommandResult Execute(CommandContext context) {
-        var dest = context.GetValue(_destination);
-        var rot = context.GetValue(_rotation);
-        UnityEngine.Debug.Log($"Teleporting to {dest} with rotation {rot}");
-        return CommandResult.Successful();
+        return CommandResult.Successful($"Teleporting to {_destination[context]} with rotation {_rotation[context]}");
       }
-
     }
-
   }
 }

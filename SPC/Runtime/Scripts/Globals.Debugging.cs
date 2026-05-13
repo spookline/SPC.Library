@@ -97,15 +97,7 @@ namespace Spookline.SPC {
         public int maxMessages = 100;
 
         public void AddLogMessage(string message, string stackTrace, LogType type) {
-            // Prepare summary from the first two lines of the message
-            var summary = string.Join("\n", message.Split('\n', 3).Take(2).Select(s => {
-                if (s.Length > 128) return s[..128].TrimEnd() + "...";
-                return s.Trim();
-            }));
-
-            var entry = new ConsoleLogEntry {
-                summary = summary,
-                message = message,
+            var entry = new ConsoleLogEntry(message) {
                 stackTrace = stackTrace,
                 type = LogTypeToExtLogType(type)
             };
@@ -145,6 +137,14 @@ namespace Spookline.SPC {
         public ExtLogType type;
 
         public string GetFullText() => $"{message}\n\n{stackTrace}";
+
+        public ConsoleLogEntry(string message) : this() {
+            this.message = message;
+            summary = string.Join("\n", message.Split('\n', 3).Take(2).Select(s => {
+                if (s.Length > 128) return s[..128].TrimEnd() + "...";
+                return s.Trim();
+            }));
+        }
 
     }
 
