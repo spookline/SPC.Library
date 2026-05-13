@@ -83,7 +83,7 @@ namespace Spookline.SPC {
       if (!string.IsNullOrEmpty(currentValue)) {
         var valColor = isMalformed ? style.error : style.valid;
         if (IsFlag) { display = $"<color={valColor}>{name}</color>"; } else {
-          display = $"<color={style.weak}>[{Name}]</color><color={valColor}>{currentValue}</color>";
+          display = $"<color={style.weak}>{Name}:</color><color={valColor}>{currentValue}</color>";
         }
       }
 
