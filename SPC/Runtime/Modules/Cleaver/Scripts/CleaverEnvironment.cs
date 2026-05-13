@@ -112,6 +112,15 @@ namespace Spookline.SPC.Cleaver {
             }
         }
 
+        protected override void Awake() {
+            base.Awake();
+            On<CollectDebugFlagsEvt>().Do(OnCollectDebugFlags);
+        }
+
+        private void OnCollectDebugFlags(ref CollectDebugFlagsEvt args) {
+            args.Add("cleaver_portals");
+        }
+
         protected override void OnEnable() {
             base.OnEnable();
             AllocateIfNeeded();

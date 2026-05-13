@@ -16,6 +16,7 @@ using HELIX.Widgets.Universal;
 using HELIX.Widgets.Universal.Controllers;
 using HELIX.Widgets.Universal.Styles;
 using HELIX.Widgets.Universal.Theme;
+using Spookline.SPC.Console;
 using Spookline.SPC.Events;
 using UnityEngine;
 using UnityEngine.UI;
@@ -146,7 +147,6 @@ namespace Spookline.SPC.UI {
 
       public TextEditingController controller;
       public GlobalKey consoleKey = new();
-      public CommandSystem system;
       public string completionText;
       public string infoText;
       public bool isExecuting;
@@ -156,9 +156,6 @@ namespace Spookline.SPC.UI {
       public override void InitState() {
         controller = AddDisposable(new TextEditingController());
         controller.onChanged += OnChanged;
-
-        system = new CommandSystem();
-        system.Register(new SpawnCommand());
 
         mount.Element.RegisterCallback<KeyDownEvent>(
           evt => {
@@ -177,6 +174,8 @@ namespace Spookline.SPC.UI {
           },
           TrickleDown.TrickleDown
         );
+
+        CommandSystem.Instance.Refresh(); // Force refresh of the command system.
       }
 
       public void HistoryChanged() {
@@ -197,6 +196,7 @@ namespace Spookline.SPC.UI {
 
       private void OnChanged(string obj) {
         if (isExecuting) return;
+        var system = CommandSystem.Instance;
         if (obj.Contains("\t")) {
           var updated = obj.Replace("\t", "");
           controller.SetValue(updated);
@@ -250,6 +250,7 @@ namespace Spookline.SPC.UI {
       private async UniTaskVoid OnSubmitted(string obj) {
         if (isExecuting || string.IsNullOrWhiteSpace(obj)) return;
         isExecuting = true;
+        var system = CommandSystem.Instance;
         try {
           ConsoleHistoryBuffer.Instance.Add(
             new ConsoleLogEntry {
@@ -268,10 +269,12 @@ namespace Spookline.SPC.UI {
 
           CommandResult result;
           try {
-            result = await system.Execute(obj)
-              .Timeout(TimeSpan.FromSeconds(5));
-          } catch (TimeoutException) { result = CommandResult.Failed("Command timed out after 5 seconds."); } catch
-            (Exception e) { result = CommandResult.Failed(e); }
+            result = await system.Execute(obj).Timeout(TimeSpan.FromSeconds(5)); //
+          } catch (TimeoutException) {
+            result = CommandResult.Failed("Command timed out after 5 seconds."); //
+          } catch (Exception e) {
+            result = CommandResult.Failed(e); //
+          }
 
           if (result.success) {
             if (result.hasMessage) {

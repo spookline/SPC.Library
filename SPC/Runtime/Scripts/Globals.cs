@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using Cysharp.Threading.Tasks;
 using Sirenix.OdinInspector;
+using Spookline.SPC.Console;
 using Spookline.SPC.Draw;
 using Spookline.SPC.Events;
 using Spookline.SPC.Ext;
@@ -61,6 +62,9 @@ namespace Spookline.SPC {
         private async UniTask AsyncInitFlow() {
             await new GlobalStartEvt().RaiseAsync();
             Started = true;
+
+            RefreshDebugFlags();
+            CommandSystem.Instance.Refresh();
         }
 
         public void ModdingEntrypoint() { }
