@@ -30,7 +30,7 @@ namespace Spookline.SPC {
     private readonly Argument<int> _amount = Optional(
       name: "amount",
       description: "Amount of entities to spawn"
-    ).Int(1);
+    ).Int(1, min: 1);
 
     private readonly Argument<float> _scale = Optional(
       name: "scale",

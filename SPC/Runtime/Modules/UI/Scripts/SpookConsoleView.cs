@@ -16,6 +16,7 @@ using HELIX.Widgets.Universal.Styles;
 using HELIX.Widgets.Universal.Theme;
 using Spookline.SPC.Events;
 using UnityEngine;
+using UnityEngine.UI;
 using UnityEngine.UIElements;
 
 namespace Spookline.SPC.UI {
@@ -244,6 +245,13 @@ namespace Spookline.SPC.UI {
         var colors = PrimitiveBaseTheme.Colors.Get(context);
         var radius = PrimitiveBaseTheme.Radius.Get(context);
         var spacing = PrimitiveBaseTheme.Spacing.Get(context);
+        var textStyleInfo = new TextStyle() {
+          fontSize = typo.FontSize2,
+          color = colors.surface.onMain,
+          wrap = WhiteSpace.Normal,
+          generator = TextGeneratorType.Standard,
+        };
+
         return new HColumn(crossAxisAlign: Align.Stretch, mainAxisAlign: Justify.FlexEnd) {
           new HBox(
             key: "InfoBox",
@@ -256,8 +264,8 @@ namespace Spookline.SPC.UI {
               )
             }
           ) {
-            new HColumn(crossAxisAlign: Align.FlexStart) {
-              new HText(infoText, enableRichText: true, key: "InfoText").Caption(context, 2),
+            new HColumn(crossAxisAlign: Align.Stretch) {
+              new HText(infoText, enableRichText: true, key: "InfoText", style: textStyleInfo),
               new HText(completionText, enableRichText: true, key: "CompletionText").Caption(context),
             }
           },

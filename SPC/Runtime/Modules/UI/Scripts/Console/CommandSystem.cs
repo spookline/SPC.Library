@@ -57,6 +57,7 @@ namespace Spookline.SPC {
     public string Name { get; set; }
     public string Description { get; set; }
     public bool IsRequired { get; set; }
+    public virtual bool UseFormat => false;
     public abstract string Prefix { get; }
     public abstract bool IsFlag { get; }
     public abstract bool IsNamed { get; }
@@ -64,6 +65,7 @@ namespace Spookline.SPC {
     public virtual object Combine(object oldValue, object newValue) => newValue;
 
     public abstract object Parse(string input);
+    public virtual string Format(object value) => value?.ToString() ?? "null";
     public abstract List<string> GetCompletions(string input);
 
     public virtual string GetShortHelp(
@@ -169,9 +171,14 @@ namespace Spookline.SPC {
 
     public static ArgumentPreset<LeafArgument<int>, int> Int(
       this ArgumentPreset preset,
-      int defaultValue = 0
+      int defaultValue = 0,
+      int? min = null,
+      int? max = null
     ) {
-      return new ArgumentPreset<LeafArgument<int>, int>(preset, new IntArgument(preset.name, "", defaultValue));
+      return new ArgumentPreset<LeafArgument<int>, int>(
+        preset,
+        new IntArgument(preset.name, "", defaultValue, false, min, max)
+      );
     }
 
     public static ArgumentPreset<LeafArgument<float>, float> Float(
@@ -264,15 +271,57 @@ namespace Spookline.SPC {
     public override bool IsNamed => false;
     public override bool IsList => false;
 
-    public IntArgument(string name, string description, int defaultValue = 0, bool isRequired = false)
-      : base(name, description, defaultValue, isRequired) { }
+    public int? Min { get; }
+    public int? Max { get; }
+
+    public IntArgument(
+      string name,
+      string description,
+      int defaultValue = 0,
+      bool isRequired = false,
+      int? min = null,
+      int? max = null
+    ) : base(name, description, defaultValue, isRequired) {
+      Min = min;
+      Max = max;
+    }
 
     public override object Parse(string input) {
-      if (int.TryParse(input, NumberStyles.Integer, CultureInfo.InvariantCulture, out var result)) return result;
+      if (int.TryParse(input, NumberStyles.Integer, CultureInfo.InvariantCulture, out var result)) {
+        if (result < Min)
+          throw new ArgumentException($"Value {result} is below minimum {Min.Value} for argument {Name}");
+
+        if (result > Max)
+          throw new ArgumentException($"Value {result} is above maximum {Max.Value} for argument {Name}");
+
+        return result;
+      }
+
       throw new ArgumentException($"Invalid integer value '{input}' for argument {Name}");
     }
 
     public override List<string> GetCompletions(string input) => new();
+
+    public override string GetShortHelp(
+      CommandInfoRichTextStyle style,
+      string currentValue = null,
+      bool isActive = false,
+      bool isMalformed = false
+    ) {
+      var help = base.GetShortHelp(style, currentValue, isActive, isMalformed);
+      if (!string.IsNullOrEmpty(currentValue)) return help;
+
+      if (Min.HasValue || Max.HasValue) {
+        var range = "(";
+        if (Min.HasValue) range += Min.Value.ToString(CultureInfo.InvariantCulture);
+        range += "..";
+        if (Max.HasValue) range += Max.Value.ToString(CultureInfo.InvariantCulture);
+        range += ")";
+        return help + $"<color={style.weak}>" + range + "</color>";
+      }
+
+      return help;
+    }
 
   }
 
@@ -308,9 +357,9 @@ namespace Spookline.SPC {
 
       if (float.TryParse(input, NumberStyles.Float, CultureInfo.InvariantCulture, out var result)) {
         result *= multiplier;
-        if (Min.HasValue && result < Min.Value)
+        if (result < Min && !Mathf.Approximately(result, Min.Value))
           throw new ArgumentException($"Value {result} is below minimum {Min.Value} for argument {Name}");
-        if (Max.HasValue && result > Max.Value)
+        if (result > Max && !Mathf.Approximately(result, Max.Value))
           throw new ArgumentException($"Value {result} is above maximum {Max.Value} for argument {Name}");
         return result;
       }
@@ -478,6 +527,8 @@ namespace Spookline.SPC {
 
     private readonly NameableArgument<T> _inner;
 
+    public override bool UseFormat => _inner.UseFormat;
+
     public NamedArgument(NameableArgument<T> inner) : base(
       inner.Name,
       inner.Description,
@@ -491,6 +542,10 @@ namespace Spookline.SPC {
     public override object Parse(string input) => _inner.Parse(input);
     public override List<string> GetCompletions(string input) => _inner.GetCompletions(input);
 
+    public override string Format(object value) {
+      return _inner.Format(value);
+    }
+
   }
 
   public class ListArgument<T> : NameableArgument<List<T>> {
@@ -499,6 +554,7 @@ namespace Spookline.SPC {
     public override bool IsFlag => false;
     public override bool IsNamed => false;
     public override bool IsList => true;
+    public override bool UseFormat => true;
 
     private readonly LeafArgument<T> _elementArg;
 
@@ -534,6 +590,12 @@ namespace Spookline.SPC {
       var parts = CommandSystem.SplitList(input);
       var lastPart = parts.Count > 0 ? parts[^1] : "";
       return _elementArg.GetCompletions(lastPart);
+    }
+
+
+    public override string Format(object value) {
+      if (value is List<T> list) return string.Join(",", list.Select(e => _elementArg.Format(e)));
+      return base.Format(value);
     }
 
   }
@@ -685,7 +747,9 @@ namespace Spookline.SPC {
         sb.Append(" ").Append(arg.GetShortHelp(style, val, arg == activeArg, isMalformed));
       }
 
-      if (!string.IsNullOrEmpty(errorSuffix)) { sb.Append($" <color={style.active}>!").Append(errorSuffix).Append("</color>"); }
+      if (!string.IsNullOrEmpty(errorSuffix)) {
+        sb.Append($" <color={style.error}>").Append(errorSuffix).Append("</color>");
+      }
 
       return sb.ToString();
     }
@@ -836,9 +900,11 @@ namespace Spookline.SPC {
 
         if (tokens.Count == 0 || (tokens.Count == 1 && !endsWithSpace)) {
           var search = tokens.Count == 0 ? "" : tokens[0];
-          var cmds = _commands.Where(c => c.Name.StartsWith(search, StringComparison.OrdinalIgnoreCase))
-            .Select(c => c.Name).ToList();
-          return new CompletionResult(cmds);
+          var allCommands = _commands
+            .Where(c => c.Name.StartsWith(search, StringComparison.OrdinalIgnoreCase))
+            .Select(c => c.Name)
+            .ToList();
+          return new CompletionResult(allCommands);
         }
 
         var current = _commands.Find(c => c.Name.Equals(tokens[0], StringComparison.OrdinalIgnoreCase));
@@ -873,66 +939,81 @@ namespace Spookline.SPC {
           if (subs.Count > 0) return new CompletionResult(subs);
         }
 
-        // Arguments completion
         var lastToken = endsWithSpace ? "" : tokens[^1];
         var completions = new List<string>();
 
-        // Track current values and active argument for rich info text
         var providedValuesRaw = new Dictionary<Argument, object>();
+        var providedValuesString = new Dictionary<Argument, string>();
         var malformedArgs = new HashSet<Argument>();
         string errorSuffix = null;
         Argument activeArg = null;
         string argInfo = null;
 
-        // Simple parsing to find provided values
-        var namedArgs = current.AllArguments.Where(a => a.IsFlag || a.IsNamed || !string.IsNullOrEmpty(a.Prefix))
+        // Argument filtering
+        var namedArgs = current.AllArguments
+          .Where(a => a.IsFlag || a.IsNamed || !string.IsNullOrEmpty(a.Prefix))
           .ToList();
+
         var positionalArgs = current.AllArguments
-          .Where(a => !a.IsFlag && !a.IsNamed && string.IsNullOrEmpty(a.Prefix)).ToList();
+          .Where(a => !a.IsFlag && !a.IsNamed && string.IsNullOrEmpty(a.Prefix))
+          .ToList();
+
         var usedTokens = new HashSet<int>();
 
-        // 1. Identify named arguments/flags and their values
+        // Named Arguments and Flags
         for (var i = tokenIdx; i < tokens.Count - (endsWithSpace ? 0 : 1); i++) {
           var t = tokens[i];
-          if (t.StartsWith("-") || t.StartsWith("--")) {
-            var arg = namedArgs.Find(a => (a.Prefix + a.Name).Equals(t, StringComparison.OrdinalIgnoreCase)
-            );
-            if (arg != null) {
-              usedTokens.Add(i);
-              if (arg.IsFlag) {
-                var val = true;
-                if (providedValuesRaw.TryGetValue(arg, out var old)) val = (bool)arg.Combine(old, true);
-                providedValuesRaw[arg] = val;
-              } else if (i + 1 < tokens.Count - (endsWithSpace ? 0 : 1)) {
-                var valStr = tokens[i + 1];
-                usedTokens.Add(++i);
-                try {
-                  var newVal = arg.Parse(valStr);
+          if (!t.StartsWith("-")) continue;
+          var arg = namedArgs.Find(a => (a.Prefix + a.Name).Equals(t, StringComparison.OrdinalIgnoreCase));
+          if (arg != null) {
+            usedTokens.Add(i);
+            if (arg.IsFlag) {
+              providedValuesString[arg] = "true"; //
+            } else if (i + 1 < tokens.Count - (endsWithSpace ? 0 : 1)) {
+              var valStr = tokens[i + 1];
+              providedValuesString[arg] = valStr;
+              usedTokens.Add(++i);
+              try {
+                var newVal = arg.Parse(valStr);
+                if (arg.UseFormat) {
                   if (providedValuesRaw.TryGetValue(arg, out var old)) newVal = arg.Combine(old, newVal);
                   providedValuesRaw[arg] = newVal;
-                } catch { malformedArgs.Add(arg); }
-              } else {
-                // Missing value for named arg - we are likely here now
-                activeArg = arg;
-                usedTokens.Add(i);
+                }
+              } catch {
+                malformedArgs.Add(arg);
+                if (arg.UseFormat) providedValuesRaw[arg] = valStr;
               }
-            } else { errorSuffix = $"Unknown argument: {t}"; }
+            } else {
+              // Missing value for named arg - we are likely here now
+              activeArg = arg;
+              usedTokens.Add(i);
+            }
+          } else {
+            if (float.TryParse(t, NumberStyles.Float, CultureInfo.InvariantCulture, out _)) {
+              // Could be a value for a positional argument
+            } else errorSuffix = $"Unknown argument: {t}";
           }
         }
 
-        // 2. Identify positional arguments
+        // Positional Arguments
         var posIdx = 0;
         for (var i = tokenIdx; i < tokens.Count - (endsWithSpace ? 0 : 1); i++) {
           if (usedTokens.Contains(i)) continue;
           if (posIdx < positionalArgs.Count) {
             var arg = positionalArgs[posIdx++];
             var valStr = tokens[i];
+            providedValuesString[arg] = valStr;
             usedTokens.Add(i);
             try {
               var newVal = arg.Parse(valStr);
-              if (providedValuesRaw.TryGetValue(arg, out var old)) newVal = arg.Combine(old, newVal);
-              providedValuesRaw[arg] = newVal;
-            } catch { malformedArgs.Add(arg); }
+              if (arg.UseFormat) {
+                if (providedValuesRaw.TryGetValue(arg, out var old)) newVal = arg.Combine(old, newVal);
+                providedValuesRaw[arg] = newVal;
+              }
+            } catch {
+              malformedArgs.Add(arg);
+              if (arg.UseFormat) providedValuesRaw[arg] = valStr;
+            }
           } else {
             errorSuffix = $"Unexpected argument: {tokens[i]}";
             usedTokens.Add(i);
@@ -940,14 +1021,9 @@ namespace Spookline.SPC {
         }
 
         // Convert raw values to strings for display
-        var providedValues = new Dictionary<Argument, string>();
         foreach (var kvp in providedValuesRaw) {
-          if (kvp.Value is System.Collections.IEnumerable enumerable && !(kvp.Value is string)) {
-            var items = new List<string>();
-            foreach (var item in enumerable) items.Add(item?.ToString() ?? "null");
-            providedValues[kvp.Key] = string.Join(",", items);
-          } else {
-            providedValues[kvp.Key] = kvp.Value?.ToString() ?? "";
+          try { providedValuesString[kvp.Key] = kvp.Key.Format(kvp.Value); } catch {
+            // ignored
           }
         }
 
@@ -1012,7 +1088,7 @@ namespace Spookline.SPC {
         var atSubcommand = usedTokens.Count == 0 && posIdx == 0;
         var richInfo = current.GetShortHelp(
           style,
-          providedValues,
+          providedValuesString,
           activeArg,
           atSubcommand,
           parentPath,
