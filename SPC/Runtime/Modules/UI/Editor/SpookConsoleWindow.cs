@@ -1,3 +1,4 @@
+using HELIX.Extensions;
 using HELIX.Widgets;
 using Spookline.SPC.UI;
 using UnityEditor;
@@ -14,7 +15,7 @@ namespace Spookline.SPC.Editor {
             rootVisualElement.Clear();
             rootVisualElement.Add(new WidgetHostElement {
                 Buildable = new SpookConsoleView(isEditor: true).ToBuildable()
-            });
+            }.Stretched());
         }
 
     }

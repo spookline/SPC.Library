@@ -3,7 +3,10 @@ using System.ComponentModel;
 using System.Linq;
 using HELIX.Coloring;
 using HELIX.Coloring.Material;
+using HELIX.Types;
 using HELIX.Widgets;
+using HELIX.Widgets.Modifiers;
+using HELIX.Widgets.Navigation;
 using HELIX.Widgets.Signals;
 using HELIX.Widgets.Theming;
 using HELIX.Widgets.Universal;
@@ -34,16 +37,29 @@ namespace Spookline.SPC.UI {
         private class State : State<SpookConsoleView> {
 
             public override Widget Build(BuildContext context) {
-                return new HThemeProvider(new List<ThemeComponent> {
-                    new PrimitiveBaseThemeComponent {
-                        colors = PrimitiveColorScheme.From(MaterialColors.Blue, Brightness.Dark),
-                        spacing = new PrimitiveSpacingScheme() { factor = 1f},
-                        typography = new PrimitiveTypographyScheme() { factor = 1f},
-                        radius = new PrimitiveRadiusScheme() { factor = 1f}
+                var colors = PrimitiveColorScheme.From(MaterialColors.Blue, Brightness.Dark);
+                var spacing = new PrimitiveSpacingScheme() { factor = 1f };
+                return new HThemeProvider(
+                        new List<ThemeComponent> {
+                            new PrimitiveBaseThemeComponent {
+                                colors = colors,
+                                spacing = spacing,
+                                typography = new PrimitiveTypographyScheme() { factor = 1f },
+                                radius = new PrimitiveRadiusScheme() { factor = 1f }
+                            }
+                        }
+                    ) {
+                        new SpookConsoleCommandLine()
                     }
-                }) {
-                    new SpookConsoleCommandLine()
-                };
+                    .Padding(spacing.Space3)
+                    .WithModifier(new BackgroundStyleModifier(colors.surface.main))
+                    .WithModifier(
+                        new TextStyleModifier(
+                            new TextStyle() {
+                                color = colors.surface.onMain
+                            }
+                        )
+                    );
             }
 
         }
@@ -93,7 +109,16 @@ namespace Spookline.SPC.UI {
                 }
 
                 if (obj.Contains("\n")) {
-                    OnSubmitted(obj.Replace("\n", "").Trim());
+                    var updated = obj.Replace("\n", "").Trim();
+                    controller.SetValue(updated);
+                    OnSubmitted(updated);
+                    return;
+                }
+
+                if (obj.EndsWith("?")) {
+                    infoText = system.GetHelp(obj.TrimEnd('?').Trim());
+                    completionText = "";
+                    SetState();
                     return;
                 }
 
@@ -132,21 +157,32 @@ namespace Spookline.SPC.UI {
 
 
             public override Widget Build(BuildContext context) {
+                ModificationBarrier.AddPostFrameCallback(() => {
+                        consoleKey.Target.Element.Q<TextElement>().style.unityTextAlign =
+                            TextAnchor.MiddleLeft;
+                    }
+                );
+
                 var style = HTextFieldStyle.DefaultStyleOf(context);
                 var typo = PrimitiveBaseTheme.Typography.Get(context);
                 var colors = PrimitiveBaseTheme.Colors.Get(context);
                 var radius = PrimitiveBaseTheme.Radius.Get(context);
-                return new HColumn(crossAxisAlign: Align.Stretch) {
+                var spacing = PrimitiveBaseTheme.Spacing.Get(context);
+                return new HColumn(crossAxisAlign: Align.Stretch, mainAxisAlign: Justify.FlexEnd) {
                     new HBox(
                         background: new BackgroundStyle {
                             color = colors.surface.container
-                        }
+                        },
+                        key: "InfoBox",
+                        borderRadius: BorderRadius.Only(topLeft: radius.Radius3, topRight: radius.Radius3)
                     ) {
                         new HColumn(crossAxisAlign: Align.FlexStart) {
                             new HText(infoText, enableRichText: true, key: "InfoText").Caption(context, 2),
                             new HText(completionText, enableRichText: true, key: "CompletionText").Caption(context),
                         }
-                    },
+                    }
+                        .Padding(spacing.Space2)
+                        .Display(!(string.IsNullOrEmpty(infoText) && string.IsNullOrEmpty(completionText))),
                     new HTextField(key: consoleKey, controller: controller, multiline: true, style: style),
                 };
             }
