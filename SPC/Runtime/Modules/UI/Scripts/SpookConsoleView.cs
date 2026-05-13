@@ -78,11 +78,11 @@ namespace Spookline.SPC.UI {
 
                     completionText = "";
                     var result = system.Complete(updated);
-                    if (result.CompletionItems.Count == 1) { ReplaceCurrentToken(result.CompletionItems[0]); } else {
-                        completionText = string.Join(" ", result.CompletionItems.ToArray());
+                    if (result.completionItems.Count == 1) { ReplaceCurrentToken(result.completionItems[0]); } else {
+                        completionText = string.Join(" ", result.completionItems.ToArray());
                     }
 
-                    infoText = result.RichInfoText ?? result.InfoText;
+                    infoText = result.richInfoText ?? result.infoText;
                     completionText = completionText.Trim();
                     SetState();
 
@@ -98,7 +98,7 @@ namespace Spookline.SPC.UI {
                 }
 
                 var lateResult = system.Complete(obj);
-                infoText = lateResult.RichInfoText ?? lateResult.InfoText;
+                infoText = lateResult.richInfoText ?? lateResult.infoText;
                 completionText = "";
                 SetState();
             }
@@ -120,8 +120,8 @@ namespace Spookline.SPC.UI {
                 Debug.Log($"[SpookConsole] >{obj}");
                 if (string.IsNullOrWhiteSpace(obj)) return;
                 var result = system.Execute(obj);
-                if (result.Success) { Debug.Log($"[SpookConsole] Success!"); } else {
-                    Debug.Log($"[SpookConsole] Failed: {result.Error}");
+                if (result.success) { Debug.Log($"[SpookConsole] Success!"); } else {
+                    Debug.Log($"[SpookConsole] Failed: {result.error}");
                 }
 
                 controller.SetValue("");

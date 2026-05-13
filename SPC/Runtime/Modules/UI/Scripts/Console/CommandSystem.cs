@@ -6,22 +6,22 @@ using System.Text;
 namespace Spookline.SPC {
 
     public struct CommandResult {
-        public bool Success;
-        public string Error;
+        public bool success;
+        public string error;
 
-        public static CommandResult Successful() => new CommandResult { Success = true };
-        public static CommandResult Failed(string error) => new CommandResult { Success = false, Error = error };
+        public static CommandResult Successful() => new CommandResult { success = true };
+        public static CommandResult Failed(string error) => new CommandResult { success = false, error = error };
     }
 
     public struct CompletionResult {
-        public List<string> CompletionItems;
-        public string InfoText;
-        public string RichInfoText;
+        public readonly List<string> completionItems;
+        public readonly string infoText;
+        public readonly string richInfoText;
 
         public CompletionResult(List<string> items, string info = null, string richInfo = null) {
-            CompletionItems = items ?? new List<string>();
-            InfoText = info;
-            RichInfoText = richInfo;
+            completionItems = items ?? new List<string>();
+            infoText = info;
+            richInfoText = richInfo;
         }
     }
 
@@ -575,8 +575,8 @@ namespace Spookline.SPC {
         }
 
         private static void DebugLogResult(CommandResult result) {
-            if (result.Success) UnityEngine.Debug.Log("Command executed successfully.");
-            else UnityEngine.Debug.LogError($"Command failed: {result.Error}");
+            if (result.success) UnityEngine.Debug.Log("Command executed successfully.");
+            else UnityEngine.Debug.LogError($"Command failed: {result.error}");
         }
 
         private class InfoSubcommand : Command {
