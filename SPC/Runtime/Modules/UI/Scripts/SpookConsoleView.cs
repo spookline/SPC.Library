@@ -1,9 +1,15 @@
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Linq;
+using HELIX.Coloring;
+using HELIX.Coloring.Material;
 using HELIX.Widgets;
 using HELIX.Widgets.Signals;
+using HELIX.Widgets.Theming;
 using HELIX.Widgets.Universal;
 using HELIX.Widgets.Universal.Controllers;
+using HELIX.Widgets.Universal.Styles;
+using HELIX.Widgets.Universal.Theme;
 using HELIX.Widgets.Utilities;
 using Spookline.SPC;
 using UnityEngine;
@@ -27,10 +33,34 @@ namespace Spookline.SPC.UI {
 
         private class State : State<SpookConsoleView> {
 
+            public override Widget Build(BuildContext context) {
+                return new HThemeProvider(new List<ThemeComponent> {
+                    new PrimitiveBaseThemeComponent {
+                        colors = PrimitiveColorScheme.From(MaterialColors.Blue, Brightness.Dark),
+                        spacing = new PrimitiveSpacingScheme() { factor = 1f},
+                        typography = new PrimitiveTypographyScheme() { factor = 1f},
+                        radius = new PrimitiveRadiusScheme() { factor = 1f}
+                    }
+                }) {
+                    new SpookConsoleCommandLine()
+                };
+            }
+
+        }
+
+    }
+
+    public class SpookConsoleCommandLine : StatefulWidget<SpookConsoleCommandLine> {
+
+        public override State<SpookConsoleCommandLine> CreateState() => new State();
+
+        private class State : State<SpookConsoleCommandLine> {
+
             public TextEditingController controller;
             public GlobalKey consoleKey = new();
             public CommandSystem system;
             public string completionText;
+            public string infoText;
 
 
             public override void InitState() {
@@ -48,34 +78,28 @@ namespace Spookline.SPC.UI {
 
                     completionText = "";
                     var result = system.Complete(updated);
-                    if (result.CompletionItems.Count == 1) {
-                        ReplaceCurrentToken(result.CompletionItems[0]);
-                    } else { completionText = string.Join(" ", result.CompletionItems.ToArray()); }
-
-                    var info = result.RichInfoText ?? result.InfoText;
-                    if (info != null) {
-                        completionText = completionText.TrimEnd() + "\n" + info;
+                    if (result.CompletionItems.Count == 1) { ReplaceCurrentToken(result.CompletionItems[0]); } else {
+                        completionText = string.Join(" ", result.CompletionItems.ToArray());
                     }
 
+                    infoText = result.RichInfoText ?? result.InfoText;
                     completionText = completionText.Trim();
                     SetState();
 
                     var unityField = consoleKey.Target.Element.Q<TextField>();
                     unityField.textSelection.cursorIndex = controller.Value.Length;
                     unityField.textSelection.selectIndex = controller.Value.Length;
-
-                    Debug.Log("[SpookConsole] Complete Tab");
                     return;
                 }
 
                 if (obj.Contains("\n")) {
                     OnSubmitted(obj.Replace("\n", "").Trim());
-                    controller.SetValue("");
                     return;
                 }
 
                 var lateResult = system.Complete(obj);
-                completionText = lateResult.RichInfoText ?? lateResult.InfoText;
+                infoText = lateResult.RichInfoText ?? lateResult.InfoText;
+                completionText = "";
                 SetState();
             }
 
@@ -93,26 +117,37 @@ namespace Spookline.SPC.UI {
 
 
             private void OnSubmitted(string obj) {
-                if (string.IsNullOrWhiteSpace(obj)) return;
                 Debug.Log($"[SpookConsole] >{obj}");
+                if (string.IsNullOrWhiteSpace(obj)) return;
                 var result = system.Execute(obj);
-                if (result.Success) {
-                    Debug.Log($"[SpookConsole] Success!");
-                } else {
+                if (result.Success) { Debug.Log($"[SpookConsole] Success!"); } else {
                     Debug.Log($"[SpookConsole] Failed: {result.Error}");
                 }
 
-                // controller.SetValue("");
-                // mount.Element.schedule.Execute(() => {
-                //     consoleKey.Focus();
-                // }).ExecuteLater(10);
+                controller.SetValue("");
+                infoText = "";
+                completionText = "";
+                SetState();
             }
 
 
             public override Widget Build(BuildContext context) {
+                var style = HTextFieldStyle.DefaultStyleOf(context);
+                var typo = PrimitiveBaseTheme.Typography.Get(context);
+                var colors = PrimitiveBaseTheme.Colors.Get(context);
+                var radius = PrimitiveBaseTheme.Radius.Get(context);
                 return new HColumn(crossAxisAlign: Align.Stretch) {
-                    new HText(completionText, enableRichText: true),
-                    new HTextField(key: consoleKey, controller: controller, multiline: true)
+                    new HBox(
+                        background: new BackgroundStyle {
+                            color = colors.surface.container
+                        }
+                    ) {
+                        new HColumn(crossAxisAlign: Align.FlexStart) {
+                            new HText(infoText, enableRichText: true, key: "InfoText").Caption(context, 2),
+                            new HText(completionText, enableRichText: true, key: "CompletionText").Caption(context),
+                        }
+                    },
+                    new HTextField(key: consoleKey, controller: controller, multiline: true, style: style),
                 };
             }
 
