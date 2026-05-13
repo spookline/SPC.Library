@@ -878,7 +878,7 @@ namespace Spookline.SPC {
         var completions = new List<string>();
 
         // Track current values and active argument for rich info text
-        var providedValues = new Dictionary<Argument, string>();
+        var providedValuesRaw = new Dictionary<Argument, object>();
         var malformedArgs = new HashSet<Argument>();
         string errorSuffix = null;
         Argument activeArg = null;
@@ -899,12 +899,18 @@ namespace Spookline.SPC {
             );
             if (arg != null) {
               usedTokens.Add(i);
-              if (arg.IsFlag) { providedValues[arg] = "true"; } else if (i + 1 < tokens.Count -
-                                                                         (endsWithSpace ? 0 : 1)) {
-                var val = tokens[i + 1];
-                providedValues[arg] = val;
+              if (arg.IsFlag) {
+                var val = true;
+                if (providedValuesRaw.TryGetValue(arg, out var old)) val = (bool)arg.Combine(old, true);
+                providedValuesRaw[arg] = val;
+              } else if (i + 1 < tokens.Count - (endsWithSpace ? 0 : 1)) {
+                var valStr = tokens[i + 1];
                 usedTokens.Add(++i);
-                try { arg.Parse(val); } catch { malformedArgs.Add(arg); }
+                try {
+                  var newVal = arg.Parse(valStr);
+                  if (providedValuesRaw.TryGetValue(arg, out var old)) newVal = arg.Combine(old, newVal);
+                  providedValuesRaw[arg] = newVal;
+                } catch { malformedArgs.Add(arg); }
               } else {
                 // Missing value for named arg - we are likely here now
                 activeArg = arg;
@@ -920,13 +926,28 @@ namespace Spookline.SPC {
           if (usedTokens.Contains(i)) continue;
           if (posIdx < positionalArgs.Count) {
             var arg = positionalArgs[posIdx++];
-            var val = tokens[i];
-            providedValues[arg] = val;
+            var valStr = tokens[i];
             usedTokens.Add(i);
-            try { arg.Parse(val); } catch { malformedArgs.Add(arg); }
+            try {
+              var newVal = arg.Parse(valStr);
+              if (providedValuesRaw.TryGetValue(arg, out var old)) newVal = arg.Combine(old, newVal);
+              providedValuesRaw[arg] = newVal;
+            } catch { malformedArgs.Add(arg); }
           } else {
             errorSuffix = $"Unexpected argument: {tokens[i]}";
             usedTokens.Add(i);
+          }
+        }
+
+        // Convert raw values to strings for display
+        var providedValues = new Dictionary<Argument, string>();
+        foreach (var kvp in providedValuesRaw) {
+          if (kvp.Value is System.Collections.IEnumerable enumerable && !(kvp.Value is string)) {
+            var items = new List<string>();
+            foreach (var item in enumerable) items.Add(item?.ToString() ?? "null");
+            providedValues[kvp.Key] = string.Join(",", items);
+          } else {
+            providedValues[kvp.Key] = kvp.Value?.ToString() ?? "";
           }
         }
 
