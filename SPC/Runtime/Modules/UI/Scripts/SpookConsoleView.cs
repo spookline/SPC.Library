@@ -156,6 +156,9 @@ namespace Spookline.SPC.UI {
       public override void InitState() {
         controller = AddDisposable(new TextEditingController());
         controller.onChanged += OnChanged;
+        controller.onBeginEditing += () => {
+          CommandSystem.Instance.Refresh();
+        };
 
         mount.Element.RegisterCallback<KeyDownEvent>(
           evt => {
@@ -288,7 +291,6 @@ namespace Spookline.SPC.UI {
             ConsoleHistoryBuffer.Instance.Add(
               new ConsoleLogEntry(result.message.ToStringNullable()) { type = ExtLogType.Error }
             );
-            Debug.LogError($"[SpookConsole] Failed: {result.message.ToStringNullable()}");
           }
         } finally { isExecuting = false; }
 
@@ -333,7 +335,8 @@ namespace Spookline.SPC.UI {
             }
           },
           new HTextField(
-            key: consoleKey,
+            key: "ConsoleInput",
+            focusKey: consoleKey,
             controller: controller,
             multiline: true,
             style: style
@@ -382,16 +385,11 @@ namespace Spookline.SPC.UI {
 
         var observer = ConsoleHistorySignalObserver.Instance;
         observer.Resubscribe();
-        observer.AddObserver(new WeakSignalObserver(this));
+        dependencyTracker.DependOnExplicit(observer, weak: true);
+        dependencyTracker.OnDependenciesChanged += OnSignalDependenciesChanged;
       }
 
-      public override void Dispose() {
-        ConsoleHistorySignalObserver.Instance.RemoveObserver(this);
-      }
-
-      public void OnSignalChanged(Signal signal) {
-        SetState();
-
+      private void OnSignalDependenciesChanged(Signal obj) {
         mount.Element.schedule
           .Execute(() => scrollController.JumpTo(scrollController.MaxOffset))
           .ExecuteLater(10);
@@ -595,6 +593,11 @@ namespace Spookline.SPC.UI {
     }
 
     private void OnLogMessageReceivedEvent(ref LogMessageReceivedEvt args) {
+      // Do not refresh on helix-reported ui errors
+      if (args.entry.message?.Contains(HelixDiagnostics.LogSignature, StringComparison.Ordinal) ?? false) {
+        return;
+      }
+
       NotifyDirty();
       NotifyObservers();
     }
