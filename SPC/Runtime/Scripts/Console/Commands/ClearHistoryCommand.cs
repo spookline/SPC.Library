@@ -5,7 +5,7 @@ namespace Spookline.SPC.Console.Commands {
         public override string Description => "Clears the command history.";
 
         public override CommandResult Execute(CommandContext context) {
-            ConsoleHistoryBuffer.Instance.Clear();
+            LogHistoryBuffer.Instance.Clear();
             return CommandResult.Successful("History cleared");
         }
 
