@@ -9,7 +9,8 @@ using UnityEngine;
 
 namespace Spookline.SPC.Cleaver {
     [HideMonoScript]
-    [DefaultExecutionOrder(-100)]
+    [DefaultExecutionOrder(-50)]
+    [AddComponentMenu("Cleaver/Viewer")]
     public class CleaverViewer : CleaverViewerBase {
 
         public LayerMask layerMask;

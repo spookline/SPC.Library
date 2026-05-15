@@ -11,6 +11,7 @@ using UnityEngine.Serialization;
 namespace Spookline.SPC.Cleaver {
     [HideMonoScript]
     [ExecuteInEditMode]
+    [AddComponentMenu("Cleaver/Proxy")]
     public class CleaverProxy : SpookBehaviour<CleaverProxy> {
 
         public float radius = 0.1f;

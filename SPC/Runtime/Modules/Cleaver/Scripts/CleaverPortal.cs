@@ -13,6 +13,7 @@ using UnityEngine.Serialization;
 
 namespace Spookline.SPC.Cleaver {
     [HideMonoScript]
+    [AddComponentMenu("Cleaver/Portal")]
     public class CleaverPortal : SpookBehaviour<CleaverPortal> {
 
         [HorizontalGroup("Connections")]

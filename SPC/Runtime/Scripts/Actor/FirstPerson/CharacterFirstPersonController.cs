@@ -5,6 +5,7 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 
 namespace Spookline.SPC.Actor.FirstPerson {
+    [HideMonoScript]
     public partial class CharacterFirstPersonController : SpookBehaviour<CharacterFirstPersonController>, IPossessor {
 
         [TabGroup("Ground")]

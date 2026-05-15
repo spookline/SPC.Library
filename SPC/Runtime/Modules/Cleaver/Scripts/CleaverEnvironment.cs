@@ -15,7 +15,8 @@ using Debug = UnityEngine.Debug;
 
 namespace Spookline.SPC.Cleaver {
     [HideMonoScript]
-    [DefaultExecutionOrder(-200)]
+    [DefaultExecutionOrder(-100)]
+    [AddComponentMenu("Cleaver/Environment")]
     public class CleaverEnvironment : SpookManagerBehaviour<CleaverEnvironment> {
 
         public bool autoStart = true;
@@ -114,6 +115,8 @@ namespace Spookline.SPC.Cleaver {
 
         protected override void Awake() {
             base.Awake();
+            Debug.Log("Cleaver environment awake", this);
+
             On<CollectDebugFlagsEvt>().Do(OnCollectDebugFlags);
         }
 

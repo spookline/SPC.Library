@@ -10,6 +10,7 @@ using UnityEngine;
 namespace Spookline.SPC.Cleaver {
     [HideMonoScript]
     [ExecuteInEditMode]
+    [AddComponentMenu("Cleaver/Proxy Group")]
     public class CleaverProxyGroup : SpookBehaviour<CleaverProxyGroup> {
 
         public CleaverProxyGroup parent;

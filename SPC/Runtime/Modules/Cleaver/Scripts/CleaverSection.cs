@@ -14,6 +14,7 @@ using UnityEngine.Serialization;
 namespace Spookline.SPC.Cleaver {
     [HideMonoScript]
     [ExecuteInEditMode]
+    [AddComponentMenu("Cleaver/Section")]
     public class CleaverSection : SpookBehaviour<CleaverSection> {
 
         [FormerlySerializedAs("region")]

@@ -14,6 +14,8 @@ using UnityEngine.AddressableAssets;
 
 namespace Spookline.SPC {
     [HideMonoScript]
+
+    [DefaultExecutionOrder(-500)]
     public partial class Globals : SerializedMonoBehaviour {
 
         public static Globals Instance { get; private set; }
