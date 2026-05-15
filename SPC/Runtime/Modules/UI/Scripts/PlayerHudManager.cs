@@ -18,10 +18,10 @@ namespace Spookline.SPC.UI {
     public readonly List<(string, Widget)> components = new();
 
     [NonSerialized]
-    public readonly GlobalKey<ScaffoldElement> scaffoldKey = new();
+    public readonly GlobalKey<NavStackElement> navStackKey = new();
 
     [NonSerialized]
-    public readonly GlobalKey<NavStackElement> navStackKey = new();
+    public readonly GlobalKey<ScaffoldElement> scaffoldKey = new();
 
     protected override void Awake() {
       base.Awake();
@@ -52,7 +52,9 @@ namespace Spookline.SPC.UI {
       IReadOnlyCollection<Modifier> modifiers = null
     ) : base(key, constants, modifiers) { }
 
-    public override State<HudWidget> CreateState() => new HudWidgetState();
+    public override State<HudWidget> CreateState() {
+      return new HudWidgetState();
+    }
 
     private class HudWidgetState : State<HudWidget> {
 

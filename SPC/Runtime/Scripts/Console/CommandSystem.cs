@@ -15,6 +15,7 @@ namespace Spookline.SPC.Console {
 
         public void Refresh() {
             _commands.Clear();
+            _commands.Add(new HelpCommand());
             _commands.Add(new ClearHistoryCommand());
             _commands.Add(new RefreshHistoryCommand());
             _commands.Add(new DebugCommand());

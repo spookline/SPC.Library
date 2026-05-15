@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using HELIX.Types;
 using HELIX.Widgets;
 using HELIX.Widgets.Modifiers;
 using HELIX.Widgets.Scrolling;
@@ -13,34 +12,25 @@ using UnityEngine.UIElements;
 namespace Spookline.SPC.UI {
   public class SpookConsoleHistory : StatefulWidget<SpookConsoleHistory> {
 
-    public Color infoColor;
-    public Color successColor;
-    public Color warningColor;
-    public Color errorColor;
-    public ValueSignal<ExtendedLogEntry?> selectedEntry;
     public bool refreshing;
 
+    public ValueSignal<ExtendedLogEntry?> selectedEntry;
+
     public SpookConsoleHistory(
-      Color infoColor,
-      Color successColor,
-      Color warningColor,
-      Color errorColor,
       ValueSignal<ExtendedLogEntry?> selectedEntry,
       bool refreshing,
       Key key = default,
       object[] constants = null,
       IReadOnlyCollection<Modifier> modifiers = null
     ) : base(key, constants, modifiers) {
-      this.infoColor = infoColor;
-      this.successColor = successColor;
-      this.warningColor = warningColor;
-      this.errorColor = errorColor;
       this.selectedEntry = selectedEntry;
       this.refreshing = refreshing;
     }
 
 
-    public override State<SpookConsoleHistory> CreateState() => new State();
+    public override State<SpookConsoleHistory> CreateState() {
+      return new State();
+    }
 
     private class State : State<SpookConsoleHistory>, ISignalObserver {
 
@@ -51,7 +41,7 @@ namespace Spookline.SPC.UI {
 
         var observer = SpookConsoleHistoryObserver.Instance;
         observer.Resubscribe();
-        dependencyTracker.DependOnExplicit(observer, weak: true);
+        dependencyTracker.DependOnExplicit(observer, true);
         dependencyTracker.OnDependenciesChanged += OnSignalDependenciesChanged;
 
         if (widget.refreshing) mount.Element.schedule.Execute(OnTimerUpdate).Every(1000);
@@ -59,9 +49,7 @@ namespace Spookline.SPC.UI {
 
       private void OnTimerUpdate(TimerState obj) {
         var observer = SpookConsoleHistoryObserver.Instance;
-        if (observer.hasUnhandledUpdate) {
-          observer.Refresh();
-        }
+        if (observer.hasUnhandledUpdate) observer.Refresh();
       }
 
       private void OnSignalDependenciesChanged(Signal obj) {
@@ -71,61 +59,61 @@ namespace Spookline.SPC.UI {
       }
 
       public override Widget Build(BuildContext context) {
+        var style = SpookTheme.Console.Get(context);
+
         return new HListView(
-          BuildLogMessageEntry,
+          (ctx, i) => BuildLogMessageEntry(style, ctx, i),
           SpookConsoleHistoryObserver.Instance.messages.Count,
           scrollController: scrollController
         );
       }
 
-      private Widget BuildLogMessageEntry(BuildContext ctx, int i) {
+      private Widget BuildLogMessageEntry(SpookConsoleStyle style, BuildContext ctx, int i) {
         var entry = SpookConsoleHistoryObserver.Instance.messages[i];
         var icon = FaSolidIcons.Info;
-        var color = widget.infoColor;
+        var color = style.colors.typeInfo;
         switch (entry.type) {
           case ExtLogType.Log: break;
           case ExtLogType.Warning:
             icon = FaSolidIcons.TriangleExclamation;
-            color = widget.warningColor;
+            color = style.colors.typeWarning;
             break;
           case ExtLogType.Error:
             icon = FaSolidIcons.CircleExclamation;
-            color = widget.errorColor;
+            color = style.colors.typeError;
             break;
           case ExtLogType.Assert:
             icon = FaSolidIcons.CircleExclamation;
-            color = widget.errorColor;
+            color = style.colors.typeError;
             break;
           case ExtLogType.Exception:
             icon = FaSolidIcons.Bug;
-            color = widget.errorColor;
+            color = style.colors.typeBug;
             break;
           case ExtLogType.Input:
             icon = FaSolidIcons.Terminal;
-            color = widget.successColor;
+            color = style.colors.typeInput;
             break;
 
           default: throw new ArgumentOutOfRangeException();
         }
 
         var text = entry.summary;
-        if (entry.repeatCount > 0) {
-          text = $"{entry.repeatCount + 1}x {text}";
-        }
+        if (entry.repeatCount > 0) text = $"{entry.repeatCount + 1}x {text}";
 
         return new HRow(
-          gap: 8f,
+          gap: style.historyIconSize.value.value * 0.5f,
           modifiers: new Modifier[] {
             new TextStyleModifier(
               new TextStyle { generator = TextGeneratorType.Standard, color = color }
             ),
             new ManipulatorModifier(BuildLogClickManipulator(entry)),
-            new PaddingModifier(EdgeInsets.Symmetric(4f, 2f)),
+            new PaddingModifier(style.historyEntryPadding)
           }
         ) {
           new HColumn(crossAxisAlign: Align.Center, mainAxisAlign: Justify.Center) {
             new HIcon(icon, FaSolidIcons.FontDefinition, color: color).Tight()
-          }.Size(16f),
+          }.Size(style.historyIconSize),
           new HText(text).Expand().Caption(ctx)
         };
       }

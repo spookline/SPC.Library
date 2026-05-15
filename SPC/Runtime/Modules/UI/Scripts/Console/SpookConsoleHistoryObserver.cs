@@ -7,13 +7,13 @@ using Spookline.SPC.Events;
 namespace Spookline.SPC.UI {
   public class SpookConsoleHistoryObserver : Signal {
 
-    public static SpookConsoleHistoryObserver Instance { get; } = new();
-
-    private IDisposable _subscription;
-
     public readonly List<string> history = new();
     public readonly List<ExtendedLogEntry> messages = new();
-    public bool hasUnhandledUpdate = false;
+
+    private IDisposable _subscription;
+    public bool hasUnhandledUpdate;
+
+    public static SpookConsoleHistoryObserver Instance { get; } = new();
 
     public void Resubscribe() {
       _subscription?.Dispose();
@@ -28,10 +28,9 @@ namespace Spookline.SPC.UI {
 
     public void Refresh() {
       messages.Clear();
-      foreach (var message in LogHistoryBuffer.Instance.messages) {
+      foreach (var message in LogHistoryBuffer.Instance.messages)
         // Later filter or process them here
         messages.Add(message);
-      }
 
       NotifyDirty();
       NotifyObservers();
@@ -42,9 +41,7 @@ namespace Spookline.SPC.UI {
       switch (args.type) {
         case LogHistoryModificationType.Added: {
           // Do not refresh on helix-reported ui errors
-          if (args.entry.message?.Contains(HelixDiagnostics.LogSignature, StringComparison.Ordinal) ?? false) {
-            return;
-          }
+          if (args.entry.message?.Contains(HelixDiagnostics.LogSignature, StringComparison.Ordinal) ?? false) return;
 
           Refresh();
           break;

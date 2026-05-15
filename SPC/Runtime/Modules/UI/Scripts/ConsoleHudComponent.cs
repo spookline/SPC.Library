@@ -2,6 +2,7 @@ using Cysharp.Threading.Tasks;
 using HELIX.Extensions;
 using HELIX.Types;
 using HELIX.Widgets;
+using HELIX.Widgets.Modifiers;
 using HELIX.Widgets.Universal;
 using HELIX.Widgets.Utilities;
 using Spookline.SPC.Ext;
@@ -15,31 +16,39 @@ namespace Spookline.SPC.UI {
 
     public InputActionReference toggleAction;
 
-    public TextAnchor position = TextAnchor.LowerCenter;
-
     private void Awake() {
-      this.PerformedInput(toggleAction, ctx => {
-        if (FocusManager.Instance.HasFocus(this, out _)) return;
-        Open();
-      });
+      this.PerformedInput(
+        toggleAction,
+        ctx => {
+          if (FocusManager.Instance.HasFocus(this, out _)) return;
+          Open();
+        }
+      );
     }
 
     public int FocusFlags =>
       DefaultFocusFlags.EnableCursor | DefaultFocusFlags.DisableLook | DefaultFocusFlags.DisableMovement |
       DefaultFocusFlags.BlockInputActions | DefaultFocusFlags.EscapeCancelable;
 
-    public void Open() => FocusManager.Instance.Focus(this, destroyCancellationToken);
-
     public void OnFocusGained(FocusContext context) {
       var scaffold = PlayerHudManager.Instance.scaffoldKey.Element;
       var focusKey = new GlobalKey();
-      Alignment.AlignmentHelper.ToColumnAlignment(position, out var mainAxis, out var crossAxis);
 
       var overlay = scaffold.AddOverlay(
         new WidgetHostElement {
-          Buildable = new HColumn(mainAxisAlign: mainAxis, crossAxisAlign: crossAxis) {
-            new SpookConsoleView(cmdTextKey: focusKey).Size(50.Percent(), 50.Percent()).Tight()
-          }.ToBuildable()
+          Buildable = new HStatefulBuilder((ctx, _) => {
+              var style = SpookTheme.Console.Get(ctx);
+              Alignment.AlignmentHelper.ToColumnAlignment(style.anchor, out var mainAxis, out var crossAxis);
+              return new HColumn(mainAxis, crossAxis) {
+                new SpookConsoleView(
+                  focusKey,
+                  modifiers: new Modifier[] {
+                    new SizeModifier(style.constraints)
+                  }
+                )
+              }.Margin(style.margin).Fill();
+            }
+          ).Fill().ToBuildable()
         }.Stretched()
       );
 
@@ -48,6 +57,10 @@ namespace Spookline.SPC.UI {
     }
 
     public void OnFocusLost(FocusContext context) { }
+
+    public void Open() {
+      FocusManager.Instance.Focus(this, destroyCancellationToken);
+    }
 
     private static async UniTaskVoid FocusLater(GlobalKey key) {
       await UniTask.Delay(10);

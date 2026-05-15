@@ -1,14 +1,11 @@
 using System;
 using System.Collections.Generic;
 using Cysharp.Threading.Tasks;
-using HELIX.Types;
 using HELIX.Widgets;
 using HELIX.Widgets.Diagnostics;
 using HELIX.Widgets.Modifiers;
 using HELIX.Widgets.Universal;
 using HELIX.Widgets.Universal.Controllers;
-using HELIX.Widgets.Universal.Styles;
-using HELIX.Widgets.Universal.Theme;
 using Spookline.SPC.Console;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -16,8 +13,9 @@ using UnityEngine.UIElements;
 namespace Spookline.SPC.UI {
   public class SpookConsoleCommandLine : StatefulWidget<SpookConsoleCommandLine> {
 
-    public CommandInfoRichTextStyle style;
     public GlobalKey cmdTextKey;
+
+    public CommandInfoRichTextStyle style;
 
     public SpookConsoleCommandLine(
       GlobalKey cmdTextKey,
@@ -31,15 +29,18 @@ namespace Spookline.SPC.UI {
     }
 
 
-    public override State<SpookConsoleCommandLine> CreateState() => new State();
+    public override State<SpookConsoleCommandLine> CreateState() {
+      return new State();
+    }
 
     private class State : State<SpookConsoleCommandLine> {
 
-      public TextEditingController controller;
       public string completionText;
+
+      public TextEditingController controller;
+      public int historyIndex = -1;
       public string infoText;
       public bool isExecuting;
-      public int historyIndex = -1;
 
 
       public override void InitState() {
@@ -69,7 +70,9 @@ namespace Spookline.SPC.UI {
       }
 
       public void HistoryChanged() {
-        if (historyIndex < 0) { controller.SetValue(""); } else {
+        if (historyIndex < 0)
+          controller.SetValue("");
+        else {
           var history = SpookConsoleHistoryObserver.Instance.history;
           historyIndex = Mathf.Min(historyIndex, history.Count - 1);
           controller.SetValue(historyIndex < 0 ? "" : history[historyIndex]);
@@ -93,9 +96,10 @@ namespace Spookline.SPC.UI {
 
           completionText = "";
           var result = system.Complete(updated, widget.style);
-          if (result.completionItems.Count == 1) { ReplaceCurrentToken(result.completionItems[0]); } else {
+          if (result.completionItems.Count == 1)
+            ReplaceCurrentToken(result.completionItems[0]);
+          else
             completionText = string.Join(" ", result.completionItems.ToArray());
-          }
 
           infoText = result.richInfoText ?? "";
           completionText = completionText.Trim();
@@ -168,11 +172,18 @@ namespace Spookline.SPC.UI {
 
           if (result.success) {
             if (result.hasMessage) {
-              LogHistoryBuffer.Instance.Add(
-                new ExtendedLogEntry(result.message.ToStringNullable()) {
-                  type = ExtLogType.Log,
-                }
-              );
+              if (result.message is ExtendedLogEntry entry) {
+                LogHistoryBuffer.Instance.Add(entry);
+              } else {
+                var content = result.message.ToStringNullable();
+                LogHistoryBuffer.Instance.Add(
+                  new ExtendedLogEntry {
+                    type = ExtLogType.Log,
+                    message = content,
+                    summary = content
+                  }
+                );
+              }
             }
           } else {
             LogHistoryBuffer.Instance.Add(
@@ -186,47 +197,32 @@ namespace Spookline.SPC.UI {
 
 
       public override Widget Build(BuildContext context) {
+        var style = SpookTheme.Console.Get(context);
+
         ModificationBarrier.AddPostFrameCallback(() => {
             widget.cmdTextKey.Target.Element.Q<TextElement>().style.unityTextAlign =
               TextAnchor.MiddleLeft;
           }
         );
 
-        var style = HTextFieldStyle.DefaultStyleOf(context);
-        var typo = PrimitiveBaseTheme.Typography.Get(context);
-        var colors = PrimitiveBaseTheme.Colors.Get(context);
-        var radius = PrimitiveBaseTheme.Radius.Get(context);
-        var spacing = PrimitiveBaseTheme.Spacing.Get(context);
-        var textStyleInfo = new TextStyle {
-          fontSize = typo.FontSize2,
-          color = colors.surface.onMain,
-          wrap = WhiteSpace.Normal,
-          generator = TextGeneratorType.Standard,
-        };
-
         return new HColumn(crossAxisAlign: Align.Stretch, mainAxisAlign: Justify.FlexEnd) {
-          new HBox(
-            key: "InfoBox",
-            background: new BackgroundStyle { color = colors.surface.container },
-            borderRadius: BorderRadius.Only(topLeft: radius.Radius3, topRight: radius.Radius3),
-            modifiers: new Modifier[] {
-              new PaddingModifier(spacing.Space2),
-              new DisplayModifier(
-                !(string.IsNullOrEmpty(infoText) && string.IsNullOrEmpty(completionText))
-              )
-            }
-          ) {
-            new HColumn(crossAxisAlign: Align.Stretch) {
-              new HText(infoText, enableRichText: true, key: "InfoText", style: textStyleInfo),
-              new HText(completionText, enableRichText: true, key: "CompletionText").Caption(context),
-            }
-          },
+          new HSubstanceBox(
+            substances: style.aheadBackground,
+            boxModifiers: new ModifierSet {
+              new PaddingModifier(style.aheadPadding),
+              new DisplayModifier(!(string.IsNullOrEmpty(infoText) && string.IsNullOrEmpty(completionText)))
+            },
+            builder: new HColumn(crossAxisAlign: Align.Stretch) {
+              new HText(infoText, true, key: "InfoText", style: style.aheadInfoText),
+              new HText(completionText, true, key: "CompletionText", style: style.aheadCompletionText)
+            }.Fill()
+          ),
           new HTextField(
             key: "ConsoleInput",
             focusKey: widget.cmdTextKey,
             controller: controller,
             multiline: true,
-            style: style
+            style: style.commandLine
           )
         };
       }

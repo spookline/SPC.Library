@@ -159,6 +159,18 @@ namespace Spookline.SPC.Console {
             };
         }
 
+        public static CommandResult Successful(string summary, string message) {
+            return new CommandResult {
+                success = true,
+                hasMessage = true,
+                message = new ExtendedLogEntry {
+                    type = ExtLogType.Log,
+                    summary = summary,
+                    message = message
+                }
+            };
+        }
+
         public static CommandResult Failed(object error) {
             return new CommandResult { success = false, hasMessage = true, message = error };
         }
