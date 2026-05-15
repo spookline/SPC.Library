@@ -1,4 +1,3 @@
-using System;
 using System.Runtime.CompilerServices;
 using Spookline.SPC.Geometry;
 using Unity.Burst;
@@ -7,14 +6,6 @@ using Unity.Jobs;
 using Unity.Mathematics;
 
 namespace Spookline.SPC.Cleaver {
-    [Flags]
-    public enum CleaverProxyBroadPhaseFlags : byte {
-
-        None = 0,
-        Intersects = 1 << 0,
-        ContainsViewer = 1 << 1
-
-    }
 
     public static class CleaverJobMath {
 
@@ -121,13 +112,11 @@ namespace Spookline.SPC.Cleaver {
         public Frustum6 frustum;
         public float4x4 viewMatrix;
         public float3 viewerPoint;
+        public float viewerRadiusSq;
         public byte queryMask;
 
         [WriteOnly]
         public NativeArray<ProxyGroupVisibility> groupVisibility;
-
-        [NativeDisableParallelForRestriction]
-        public NativeArray<CleaverProxyBroadPhaseFlags> proxyVisibility;
 
         [NativeDisableParallelForRestriction]
         public NativeArray<float> proxyCoverage;
@@ -160,21 +149,18 @@ namespace Spookline.SPC.Cleaver {
             for (var i = start; i < end; i++) {
                 var proxy = proxies[i];
 
-                if (proxy.query.ContainsPoint(viewerPoint)) {
-                    proxyVisibility[i] = CleaverProxyBroadPhaseFlags.Intersects |
-                                         CleaverProxyBroadPhaseFlags.ContainsViewer;
+                if (proxy.query.DistanceSqToPoint(viewerPoint) <= viewerRadiusSq) {
                     proxyCoverage[i] = 1f;
                     continue;
                 }
 
                 if (frustum.Intersects(proxy.bounds)) {
-                    proxyVisibility[i] = CleaverProxyBroadPhaseFlags.Intersects;
                     FastFrustumHelpers.CalculateScreenCoverage(proxy.bounds, viewMatrix, out var coverage);
                     proxyCoverage[i] = coverage;
                     continue;
                 }
 
-                proxyVisibility[i] = CleaverProxyBroadPhaseFlags.None;
+                proxyCoverage[i] = 0f;
             }
         }
 
@@ -182,7 +168,9 @@ namespace Spookline.SPC.Cleaver {
             var start = group.proxyIndex;
             var end = start + group.proxyCount;
 
-            for (var i = start; i < end; i++) proxyVisibility[i] = CleaverProxyBroadPhaseFlags.None;
+            for (var i = start; i < end; i++) {
+                proxyCoverage[i] = 0f;
+            }
         }
 
     }
