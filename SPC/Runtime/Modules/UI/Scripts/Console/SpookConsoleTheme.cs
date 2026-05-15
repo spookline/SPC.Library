@@ -144,7 +144,7 @@ namespace Spookline.SPC.UI {
 
         viewerBackground = new BoxSubstance {
           background = new BackgroundStyle {
-            color = colors.surface.container
+            color = isEditor ? colors.surface.container : colors.surface.container.WithOpacity(0.8f)
           },
           borderRadius = BorderRadius.All(radius.Radius3)
         },
@@ -166,7 +166,7 @@ namespace Spookline.SPC.UI {
 
         aheadBackground = new BoxSubstance {
           background = new BackgroundStyle {
-            color = colors.surface.container
+            color =  isEditor ? colors.surface.container : colors.surface.container.WithOpacity(0.95f)
           },
           borderRadius = BorderRadius.Only(radius.Radius3, radius.Radius3)
         },
