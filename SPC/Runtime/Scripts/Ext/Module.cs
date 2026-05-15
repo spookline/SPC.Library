@@ -5,6 +5,7 @@ using Spookline.SPC.Events;
 using UnityEngine;
 
 namespace Spookline.SPC.Ext {
+
     public abstract class Module<TSelf> : Module where TSelf : Module<TSelf> {
 
         public static bool HasInstance => Instance;

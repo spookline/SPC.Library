@@ -150,7 +150,13 @@ namespace Spookline.SPC.Events {
         /// <param name="handler">the delegate to subscribe</param>
         /// <param name="priority">the priority of the subscription</param>
         /// <param name="debugName">The debug name of the subscription</param>
-        public HandlerRegistration<T> Subscribe(EventHandler<T> handler, int priority = 0, string debugName = null) {
+        /// <param name="interceptor">An optional interceptor to wrap the handler with.</param>
+        public HandlerRegistration<T> Subscribe(
+            EventHandler<T> handler,
+            int priority = 0,
+            string debugName = null,
+            EventInterceptor<T> interceptor = null
+        ) {
             if (handler == null) throw new ArgumentNullException(nameof(handler));
 
             lock (_registrations) {
@@ -158,6 +164,7 @@ namespace Spookline.SPC.Events {
                 debugName ??= EventReactorInfo.GetDebugName(handler);
 #endif
 
+                if (interceptor != null) handler = interceptor(handler);
                 var registration = new HandlerRegistration<T>(
                     this,
                     priority,
@@ -186,12 +193,14 @@ namespace Spookline.SPC.Events {
         /// <param name="handler">the delegate to subscribe</param>
         /// <param name="priority">the priority of the subscription</param>
         /// <param name="debugName">The debug name of the subscription</param>
+        /// <param name="interceptor">An optional interceptor to wrap the handler with.</param>
         public HandlerRegistration<T> Subscribe(
             ConsumerEventHandler<T> handler,
             int priority = 0,
-            string debugName = null
+            string debugName = null,
+            EventInterceptor<T> interceptor = null
         ) {
-            return Subscribe((ref T args) => handler(args), priority, debugName);
+            return Subscribe((ref T args) => handler(args), priority, debugName, interceptor);
         }
 
         /// <summary>
@@ -200,11 +209,17 @@ namespace Spookline.SPC.Events {
         /// <param name="handler">the delegate to subscribe</param>
         /// <param name="priority">the priority of the subscription</param>
         /// <param name="debugName">The debug name of the subscription</param>
+        /// <param name="interceptor">An optional interceptor to wrap the handler with.</param>
         public HandlerRegistration<T>
-            SubscribeOnce(EventHandler<T> handler, int priority = 0, string debugName = null) {
+            SubscribeOnce(
+                EventHandler<T> handler,
+                int priority = 0,
+                string debugName = null,
+                EventInterceptor<T> interceptor = null
+            ) {
             lock (_registrations) {
                 var consumer = new SingleConsumer(handler);
-                var registration = Subscribe(consumer.Handle, priority, debugName);
+                var registration = Subscribe(consumer.Handle, priority, debugName, interceptor);
                 consumer.registration = registration;
                 return registration;
             }
@@ -217,11 +232,17 @@ namespace Spookline.SPC.Events {
         /// <param name="handler">the delegate to subscribe</param>
         /// <param name="priority">the priority of the subscription</param>
         /// <param name="debugName">The debug name of the subscription</param>
+        /// <param name="interceptor">An optional interceptor to wrap the handler with.</param>
         public HandlerRegistration<T>
-            SubscribeOnce(ConsumerEventHandler<T> handler, int priority = 0, string debugName = null) {
+            SubscribeOnce(
+                ConsumerEventHandler<T> handler,
+                int priority = 0,
+                string debugName = null,
+                EventInterceptor<T> interceptor = null
+            ) {
             lock (_registrations) {
                 var consumer = new SingleConsumer((ref T args) => handler(args));
-                var registration = Subscribe(consumer.Handle, priority, debugName);
+                var registration = Subscribe(consumer.Handle, priority, debugName, interceptor);
                 consumer.registration = registration;
                 return registration;
             }
@@ -234,14 +255,16 @@ namespace Spookline.SPC.Events {
         /// <param name="handler">the stream handler delegate to subscribe</param>
         /// <param name="priority">the priority of the subscription</param>
         /// <param name="debugName">The debug name of the subscription</param>
+        /// <param name="interceptor">An optional interceptor to wrap the handler with.</param>
         public HandlerRegistration<T> SubscribeStream(
             StreamEventHandler<T> handler,
             int priority = 0,
-            string debugName = null
+            string debugName = null,
+            EventInterceptor<T> interceptor = null
         ) {
             lock (_registrations) {
                 var consumer = new StreamConsumer(handler);
-                var registration = Subscribe(consumer.Handle, priority, debugName);
+                var registration = Subscribe(consumer.Handle, priority, debugName, interceptor);
                 consumer.registration = registration;
                 return registration;
             }

@@ -103,6 +103,7 @@ namespace Spookline.SPC.Geometry {
         }
 
     }
+
     public static class FrustumHelper {
 
         private static readonly UnityEngine.Plane[] _sharedUnityPlanes = new UnityEngine.Plane[6];
@@ -136,7 +137,7 @@ namespace Spookline.SPC.Geometry {
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Plane ToMathematicsPlane(this UnityEngine.Plane plane) {
-            var n = plane.normal;
+            var n = math.normalizesafe(plane.normal, new float3(0, 1f, 0));
             return new Plane(new float3(n.x, n.y, n.z), plane.distance);
         }
 
@@ -322,6 +323,7 @@ namespace Spookline.SPC.Geometry {
                 CalculateScreenCoverage(aabb[index], matrix, out var result);
                 coverage[index] = result;
             }
+
         }
 
         public static JobHandle CalculateScreenCoverageBatched(
@@ -404,7 +406,6 @@ namespace Spookline.SPC.Geometry {
             rectMin = math.min(rectMin, ndc);
             rectMax = math.max(rectMax, ndc);
         }
-
 
     }
 }

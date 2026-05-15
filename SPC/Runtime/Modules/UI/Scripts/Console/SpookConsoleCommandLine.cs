@@ -17,14 +17,17 @@ namespace Spookline.SPC.UI {
   public class SpookConsoleCommandLine : StatefulWidget<SpookConsoleCommandLine> {
 
     public CommandInfoRichTextStyle style;
+    public GlobalKey cmdTextKey;
 
     public SpookConsoleCommandLine(
+      GlobalKey cmdTextKey,
       CommandInfoRichTextStyle style,
       Key key = default,
       object[] constants = null,
       IReadOnlyCollection<Modifier> modifiers = null
     ) : base(key, constants, modifiers) {
       this.style = style;
+      this.cmdTextKey = cmdTextKey;
     }
 
 
@@ -33,7 +36,6 @@ namespace Spookline.SPC.UI {
     private class State : State<SpookConsoleCommandLine> {
 
       public TextEditingController controller;
-      public GlobalKey consoleKey = new();
       public string completionText;
       public string infoText;
       public bool isExecuting;
@@ -77,7 +79,7 @@ namespace Spookline.SPC.UI {
       }
 
       public void SelectEnd() {
-        var unityField = consoleKey.Target.Element.Q<TextField>();
+        var unityField = widget.cmdTextKey.Target.Element.Q<TextField>();
         unityField.textSelection.cursorIndex = controller.Value.Length;
         unityField.textSelection.selectIndex = controller.Value.Length;
       }
@@ -185,7 +187,7 @@ namespace Spookline.SPC.UI {
 
       public override Widget Build(BuildContext context) {
         ModificationBarrier.AddPostFrameCallback(() => {
-            consoleKey.Target.Element.Q<TextElement>().style.unityTextAlign =
+            widget.cmdTextKey.Target.Element.Q<TextElement>().style.unityTextAlign =
               TextAnchor.MiddleLeft;
           }
         );
@@ -221,7 +223,7 @@ namespace Spookline.SPC.UI {
           },
           new HTextField(
             key: "ConsoleInput",
-            focusKey: consoleKey,
+            focusKey: widget.cmdTextKey,
             controller: controller,
             multiline: true,
             style: style

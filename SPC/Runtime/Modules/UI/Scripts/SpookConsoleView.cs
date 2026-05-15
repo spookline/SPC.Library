@@ -6,12 +6,14 @@ using HELIX.Extensions;
 using HELIX.Types;
 using HELIX.Widgets;
 using HELIX.Widgets.Modifiers;
+using HELIX.Widgets.Navigation;
 using HELIX.Widgets.Signals;
 using HELIX.Widgets.Theming;
 using HELIX.Widgets.Universal;
 using HELIX.Widgets.Universal.Styles;
 using HELIX.Widgets.Universal.Theme;
 using Spookline.SPC.Console;
+using Spookline.SPC.Focus;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -19,14 +21,17 @@ namespace Spookline.SPC.UI {
   public class SpookConsoleView : StatefulWidget<SpookConsoleView> {
 
     public readonly bool isEditor;
+    public GlobalKey cmdTextKey;
 
     public SpookConsoleView(
+      GlobalKey cmdTextKey = null,
       bool isEditor = false,
       Key key = default,
       object[] constants = null,
       IReadOnlyCollection<Modifier> modifiers = null
     ) : base(key, constants, modifiers) {
       this.isEditor = isEditor;
+      this.cmdTextKey = cmdTextKey ?? new GlobalKey();
     }
 
     public override State<SpookConsoleView> CreateState() => new State();
@@ -111,7 +116,7 @@ namespace Spookline.SPC.UI {
                 }
               )
             }.Positioned(EdgeInsets.Only(0, 0, 0, 32)),
-            new SpookConsoleCommandLine(consoleStyle)
+            new SpookConsoleCommandLine(widget.cmdTextKey, consoleStyle)
               .Positioned(EdgeInsets.Only(bottom: 0, left: 0, right: 0))
           }
         };
