@@ -17,6 +17,32 @@ namespace Spookline.SPC.Geometry {
         private const float _quaternionStep = 0.0005f;
         private const float _boundsStep = 0.01f;
 
+        public static int3 ToGrid(float3 position, float gridSize) {
+            return (int3)math.round(position / gridSize);
+        }
+
+        public static float3 FromGrid(int3 gridPosition, float gridSize) {
+            return gridPosition * new float3(gridSize);
+        }
+
+        // [XXXXXX][ZZZZZZ][YYYY] | 24bit 24bit 16bit
+        public static long PackGridPosition(int3 position) {
+            var x = (long)position.x & 0xFFFFFF;
+            var z = (long)position.z & 0xFFFFFF;
+            var y = (long)position.y & 0xFFFF;
+
+            return (x << 40) | (z << 16) | y;
+        }
+
+        // [XXXXXX][ZZZZZZ][YYYY] | 24bit 24bit 16bit
+        public static int3 UnpackGridPosition(long gridPosition) {
+            var x = (int)((gridPosition >> 40) & 0xFFFFFF);
+            var z = (int)((gridPosition >> 16) & 0xFFFFFF);
+            var y = (int)(gridPosition & 0xFFFF);
+
+            return new int3(x, y, z);
+        }
+
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static ulong Pos(float3 position) {
@@ -167,8 +193,7 @@ namespace Spookline.SPC.Geometry {
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static int Finalize(ulong hash) {
-            unchecked
-            {
+            unchecked {
                 hash ^= hash >> 33;
                 hash *= 0xff51afd7ed558ccdUL;
                 hash ^= hash >> 33;
@@ -181,8 +206,7 @@ namespace Spookline.SPC.Geometry {
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static int FinalizeFast(ulong hash) {
-            unchecked
-            {
+            unchecked {
                 hash ^= hash >> 33;
                 hash *= 0xff51afd7ed558ccdUL;
                 hash ^= hash >> 33;
@@ -214,7 +238,7 @@ namespace Spookline.SPC.Geometry {
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static int4 QuantizeQuaternion(quaternion q) {
-            float4 v = q.value;
+            var v = q.value;
 
             // q and -q represent the same rotation.
             if (v.w < 0f)
