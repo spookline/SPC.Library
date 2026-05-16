@@ -103,17 +103,13 @@ namespace Spookline.SPC.Geometry {
             var distSq = math.lengthsq(v);
 
             var maxDist = radius + sphereRadius + epsilon;
-            if (distSq > maxDist * maxDist)
-                return false;
-
-            if (distSq <= epsilon)
-                return true;
+            if (distSq > maxDist * maxDist) return false;
+            if (distSq <= epsilon) return true;
 
             var dist = math.sqrt(distSq);
 
             // Sphere contains the cone origin.
-            if (dist <= sphereRadius + epsilon)
-                return true;
+            if (dist <= sphereRadius + epsilon) return true;
 
             var centerCos = math.dot(v, direction) / dist;
 
@@ -175,8 +171,7 @@ namespace Spookline.SPC.Geometry {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool IntersectsBroad(OrientedBoxQuery box, float epsilon = 1e-5f) {
             // First reject: finite sphere of cone vs OBB.
-            if (!box.OverlapsSphere(origin, radius, epsilon))
-                return false;
+            if (!box.OverlapsSphere(origin, radius, epsilon)) return false;
 
             // Conservative angular test: approximate OBB by bounding sphere.
             var boundingRadius = math.length(box.halfExtent);

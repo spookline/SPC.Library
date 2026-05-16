@@ -75,18 +75,85 @@ namespace Spookline.SPC.Cleaver {
         // Initial state, the region's visibility is not yet evaluated.
         None = 0,
 
+        /// <summary>
+        /// The group is excluded from the visibility check because of the <see cref="CleaverProxyGroupData.mask"/>.
+        /// </summary>
         Excluded = 1 << 0,
+
+        /// <summary>
+        /// The group is culled by the <see cref="CleaverProxyData.bounds"/> volume.
+        /// </summary>
         Culled = 1 << 1,
+
+        /// <summary>
+        /// The group was not <see cref="Excluded"/> or <see cref="Culled"/>, but no raycast hit was inside of the
+        /// <see cref="CleaverProxyData.query"/> volume.
+        /// </summary>
+        /// <remarks>
+        /// If both <see cref="Occluded"/> and <see cref="Raycast"/> are true, the group has a raycast hit, that is valid
+        /// from the viewer's camera position but is outside the viewer's visibility volume.
+        /// </remarks>
         Occluded = 1 << 2,
 
-        VisibleFrustum = 1 << 4,
-        InBounds = 1 << 5,
-        SampleVisible = 1 << 6,
+        /// <summary>
+        /// The viewer's visibility volume intersects the <see cref="CleaverProxyData.bounds"/> volume.
+        /// </summary>
+        Frustum = 1 << 4,
+
+        /// <summary>
+        /// The viewer's position is fully inside a <see cref="CleaverProxyData.bounds"/> volume.
+        /// </summary>
+        Bounds = 1 << 5,
+
+        /// <summary>
+        /// The viewer can see a sample point of a <see cref="CleaverProxy"/> from any camera rotation.
+        /// </summary>
+        /// <remarks>
+        /// This flag is conservative and does not guarantee that the raycast hits are inside the viewing volume,
+        /// just that from the viewer's position, there is a valid raycast hit that is not occluded.
+        ///
+        /// To further restrict the raycast hits, use <see cref="Occluded"/>.
+        /// </remarks>
+        Raycast = 1 << 6,
+
+        /// <summary>
+        /// The viewer's position is fully inside a <see cref="CleaverProxyData.query"/> volume.
+        /// </summary>
         Contained = 1 << 7,
 
-
+        /// <summary>
+        /// All negative flags combined.
+        /// </summary>
         AllNegative = Excluded | Culled | Occluded,
-        AllPositive = VisibleFrustum | InBounds | SampleVisible | Contained
+
+        /// <summary>
+        /// All strictly negative flags, I.e. excluding <see cref="Occluded"/>.
+        /// </summary>
+        AllStrictNegative = Excluded | Culled,
+
+        /// <summary>
+        /// All positive flags combined.
+        /// </summary>
+        /// <remarks>
+        /// To check if a group is completely visible, do Bitwise-And on <see cref="AllPositive"/> and verify that
+        /// the result is equal and not <see cref="None"/> -> Any visibility flag is set and no negative flags are set.
+        /// </remarks>
+        AllPositive = Frustum | Bounds | Raycast | Contained
+
+    }
+
+    public static class ProxyGroupVisibilityExtensions {
+
+        public static bool IsVisible(this ProxyGroupVisibility visibility) {
+            return visibility != ProxyGroupVisibility.None &&
+                   (visibility & ProxyGroupVisibility.AllPositive) == visibility;
+        }
+
+        public static bool IsBroadVisible(this ProxyGroupVisibility visibility) {
+            return visibility != ProxyGroupVisibility.None &&
+                   (visibility & ProxyGroupVisibility.AllPositive) != ProxyGroupVisibility.None &&
+                   (visibility & ProxyGroupVisibility.AllStrictNegative) == ProxyGroupVisibility.None;
+        }
 
     }
 
