@@ -11,7 +11,6 @@ namespace Spookline.SPC.Cleaver {
     [AddComponentMenu("Cleaver/Frustum Viewer")]
     public class CleaverFrustumViewer : CleaverViewerBase<CleaverFrustumViewer> {
 
-        public LayerMask layerMask;
         public float detailThreshold = FrustumHelper.InverseRemapPerceptionScreenCoverage(0.25f);
         public float screenThreshold = FrustumHelper.InverseRemapPerceptionScreenCoverage(0.10f);
         public float nearDistance = 1f;
@@ -24,7 +23,8 @@ namespace Spookline.SPC.Cleaver {
         private ulong _lastHash;
 
 
-        private void Awake() {
+        protected override void Awake() {
+            base.Awake();
             On<CleaverBatchedViewerRefreshEvt>().Do(OnBatchedRefresh);
             On<CleaverBatchedViewerRaycastEvt>().Do(OnBatchedRaycast);
         }
@@ -32,37 +32,26 @@ namespace Spookline.SPC.Cleaver {
 
         public void Update() {
             if (!trackedCamera) return;
-            // if (CleaverEnvironment.Instance.version == 0) return;
-            // var lastPosition = position;
-            // var lastRotation = rotation;
-            // position = trackedCamera.transform.position;
-            // rotation = trackedCamera.transform.rotation;
-            //
-            // if (!SpacialHash.PosRot(lastPosition, position, lastRotation, rotation)) {
-            //     trackedCamera.CalculateFrustum6(ref frustum);
-            //     worldToProjectionMatrix = trackedCamera.CalculateWorldToProjectionMatrix();
-            //
-            //     RefreshSections();
-            // }
-            for (var i = 0; i < groupVisibility.Length; i++) { Debug.Log($"Group {i}: {groupVisibility[i]}"); }
+            // for (var i = 0; i < groupVisibility.Length; i++) { Debug.Log($"Group {i}: {groupVisibility[i]}"); }
         }
 
         private void OnBatchedRefresh(ref CleaverBatchedViewerRefreshEvt args) {
             if (!isActiveAndEnabled) return;
+            if (!trackedCamera) return;
             var lastPosition = position;
             var lastRotation = rotation;
             position = trackedCamera.transform.position;
             rotation = trackedCamera.transform.rotation;
 
-            _raycastCommands.Clear();
-            _raycastProxyIndices.Clear();
+            raycastCommands.Clear();
+            raycastProxyIndices.Clear();
             RefitArrays(args.environment);
 
             if (!SpacialHash.PosRot(lastPosition, position, lastRotation, rotation)) {
                 trackedCamera.CalculateFrustum6(ref frustum);
                 worldToProjectionMatrix = trackedCamera.CalculateWorldToProjectionMatrix();
 
-                var sectionJob = args.environment.QuerySections(position, (byte)cleaverMask, currentSections);
+                var sectionJob = args.environment.QuerySections(position, (byte)occlusionMask, currentSections);
                 args.batch.Add(sectionJob);
 
                 var batchJob = BroadPhase(args.environment);
@@ -72,18 +61,17 @@ namespace Spookline.SPC.Cleaver {
 
         private void OnBatchedRaycast(ref CleaverBatchedViewerRaycastEvt args) {
             if (!isActiveAndEnabled) return;
-            if (_raycastCommands.Length == 0) return;
-            Debug.Log($"Scheduling { _raycastCommands.Length} raycasts");
+            if (raycastCommands.Length == 0) return;
 
             var batchHandle = RaycastCommand.ScheduleBatch(
-                _raycastCommands.AsArray(),
-                _raycastResults,
+                raycastCommands.AsArray(),
+                raycastResults,
                 32
-                //, dependsOn: commandHandle
             );
             var resultJob = new CleaverFrustumRaycastResultJob {
-                raycastResults = _raycastResults,
-                raycastProxyIndices = _raycastProxyIndices,
+                raycastResults = raycastResults,
+                raycastProxyIndices = raycastProxyIndices,
+                raycastCommands = raycastCommands,
                 proxyGroups = args.environment.proxyGroups,
                 proxies = args.environment.proxies,
                 groupVisibility = groupVisibility,
@@ -109,7 +97,7 @@ namespace Spookline.SPC.Cleaver {
                 viewMatrix = worldToProjectionMatrix,
                 viewerPoint = position,
                 viewerRadiusSq = nearDistance * nearDistance,
-                queryMask = (byte)cleaverMask,
+                queryMask = (byte)visibilityMask,
                 groupVisibility = groupVisibility,
                 proxyCoverage = proxyCoverage
             };
@@ -118,9 +106,9 @@ namespace Spookline.SPC.Cleaver {
                 samplePoints = env.samplePoints,
                 proxyCoverage = proxyCoverage,
                 viewerPoint = position,
-                layerMask = layerMask,
-                raycastCommands = _raycastCommands,
-                raycastProxyIndices = _raycastProxyIndices,
+                layerMask = env.GetMask(occlusionMask),
+                raycastCommands = raycastCommands,
+                raycastProxyIndices = raycastProxyIndices,
             };
 
             var groupsLength = env.proxyGroups.Length;

@@ -129,7 +129,7 @@ namespace Spookline.SPC.Cleaver {
         }
 
         private void OnCollectDebugFlags(ref CollectDebugFlagsEvt args) {
-            args.Add("cleaver_portals");
+            args.Add("cleaver_portals", "cleaver_viewers");
         }
 
         protected override void OnEnable() {

@@ -1,16 +1,25 @@
 using System;
 using System.Text;
 using Sirenix.OdinInspector;
+using Spookline.SPC.Common;
+using Spookline.SPC.Draw;
 using Spookline.SPC.Ext;
 using Unity.Collections;
 using Unity.Mathematics;
 using UnityEngine;
+using UnityEngine.Serialization;
 
 namespace Spookline.SPC.Cleaver {
     public abstract class CleaverViewerBase<T> : SpookBehaviour<T> where T : CleaverViewerBase<T> {
 
         [EnumToggleButtons]
-        public ByteMask cleaverMask = ByteMask.All;
+        public ByteMask visibilityMask = ByteMask.All;
+
+        [FormerlySerializedAs("collisionMask")]
+        [FormerlySerializedAs("cleaverMask")]
+        [EnumToggleButtons]
+        public ByteMask occlusionMask = ByteMask.World;
+
 
         public float3 position;
         public quaternion rotation;
@@ -27,15 +36,14 @@ namespace Spookline.SPC.Cleaver {
         [NonSerialized]
         public NativeArray<float> proxyCoverage;
 
-        [NonSerialized]
-        protected NativeArray<RaycastHit> _raycastResults;
 
+        // Internal variables for implementors
         [NonSerialized]
-        protected NativeList<RaycastCommand> _raycastCommands;
-
+        protected NativeArray<RaycastHit> raycastResults;
         [NonSerialized]
-        protected NativeList<int> _raycastProxyIndices;
-
+        protected NativeList<RaycastCommand> raycastCommands;
+        [NonSerialized]
+        protected NativeList<int> raycastProxyIndices;
         [NonSerialized]
         protected NativeHashSet<int> queriedProxies;
         [NonSerialized]
@@ -60,11 +68,28 @@ namespace Spookline.SPC.Cleaver {
             }
         }
 
+        protected virtual void Awake() {
+            On<DebugDrawEvt>().Do(OnDebugDrawViewerBase);
+        }
+
+        private void OnDebugDrawViewerBase(ref DebugDrawEvt args) {
+            if (!isActiveAndEnabled) return;
+            if (!args.HasFlag("cleaver_viewers")) return;
+            var draw = args.drawer;
+            var env = CleaverEnvironment.Instance;
+            for (var i = 0; i < env.proxyGroups.Length; i++) {
+                var proxyGroup = env.proxyGroups[i];
+                if (!groupVisibility.TryGetIndex(i, out var group)) return;
+                using (draw.Scope(group.ToDebugColor()))
+                    draw.Line(proxyGroup.bounds.Center, position + new float3(0, -0.5f, 0));
+            }
+        }
+
         protected override void OnEnable() {
             base.OnEnable();
             currentSections = new NativeHashSet<ulong>(8, Allocator.Persistent);
-            _raycastCommands = new NativeList<RaycastCommand>(Allocator.Persistent);
-            _raycastProxyIndices = new NativeList<int>(Allocator.Persistent);
+            raycastCommands = new NativeList<RaycastCommand>(Allocator.Persistent);
+            raycastProxyIndices = new NativeList<int>(Allocator.Persistent);
             queriedProxies = new NativeHashSet<int>(8, Allocator.Persistent);
             visibleProxies = new NativeHashSet<int>(8, Allocator.Persistent);
             indirectVisibleProxies = new NativeHashSet<int>(8, Allocator.Persistent);
@@ -76,9 +101,9 @@ namespace Spookline.SPC.Cleaver {
             if (proxyCoverage.IsCreated) proxyCoverage.Dispose();
             if (groupVisibility.IsCreated) groupVisibility.Dispose();
             if (sectionVisibility.IsCreated) sectionVisibility.Dispose();
-            if (_raycastResults.IsCreated) _raycastResults.Dispose();
-            if (_raycastCommands.IsCreated) _raycastCommands.Dispose();
-            if (_raycastProxyIndices.IsCreated) _raycastProxyIndices.Dispose();
+            if (raycastResults.IsCreated) raycastResults.Dispose();
+            if (raycastCommands.IsCreated) raycastCommands.Dispose();
+            if (raycastProxyIndices.IsCreated) raycastProxyIndices.Dispose();
             if (queriedProxies.IsCreated) queriedProxies.Dispose();
             if (visibleProxies.IsCreated) visibleProxies.Dispose();
             if (indirectVisibleProxies.IsCreated) indirectVisibleProxies.Dispose();
@@ -95,14 +120,14 @@ namespace Spookline.SPC.Cleaver {
                 proxyCoverage = new NativeArray<float>(env.proxies.Length, Allocator.Persistent);
             }
 
-            if (!_raycastResults.IsCreated || _raycastResults.Length != env.samplePoints.Length) {
-                if (_raycastResults.IsCreated) _raycastResults.Dispose();
-                _raycastResults = new NativeArray<RaycastHit>(env.samplePoints.Length, Allocator.Persistent);
+            if (!raycastResults.IsCreated || raycastResults.Length != env.samplePoints.Length) {
+                if (raycastResults.IsCreated) raycastResults.Dispose();
+                raycastResults = new NativeArray<RaycastHit>(env.samplePoints.Length, Allocator.Persistent);
             }
         }
 
         public void RefreshSections() {
-            CleaverEnvironment.Instance.QuerySectionsImmediate(position, (byte)cleaverMask, currentSections);
+            CleaverEnvironment.Instance.QuerySectionsImmediate(position, (byte)occlusionMask, currentSections);
         }
 
     }

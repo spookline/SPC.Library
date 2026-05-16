@@ -155,6 +155,22 @@ namespace Spookline.SPC.Cleaver {
                    (visibility & ProxyGroupVisibility.AllStrictNegative) == ProxyGroupVisibility.None;
         }
 
+        public static Color ToDebugColor(this ProxyGroupVisibility visibility) {
+            if (visibility.IsVisible()) {
+                if (visibility.HasFlag(ProxyGroupVisibility.Contained)) return Color.blue;
+                return new Color(0f, 1f, 1f, 1f) {
+                    g = visibility.HasFlag(ProxyGroupVisibility.Raycast) ? 1f : 0f,
+                    b = visibility.HasFlag(ProxyGroupVisibility.Bounds) ? 1f : 0f
+                };
+
+            }
+
+            if (visibility.HasFlag(ProxyGroupVisibility.Occluded)) return Color.yellow;
+            if (visibility.HasFlag(ProxyGroupVisibility.Culled)) return Color.red;
+            if (visibility.HasFlag(ProxyGroupVisibility.Excluded)) return Color.gray;
+            return Color.white;
+        }
+
     }
 
     [Flags]

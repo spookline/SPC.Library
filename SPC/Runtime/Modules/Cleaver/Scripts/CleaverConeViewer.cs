@@ -13,7 +13,6 @@ namespace Spookline.SPC.Cleaver {
     [AddComponentMenu("Cleaver/Cone Viewer")]
     public class CleaverConeViewer : CleaverViewerBase<CleaverConeViewer> {
 
-        public LayerMask layerMask;
         public float detailThreshold = FrustumHelper.InverseRemapPerceptionScreenCoverage(0.25f);
         public float screenThreshold = FrustumHelper.InverseRemapPerceptionScreenCoverage(0.10f);
         public float nearDistance = 1f;
@@ -27,13 +26,14 @@ namespace Spookline.SPC.Cleaver {
         private ulong _lastHash;
 
 
-        private void Awake() {
+        protected override void Awake() {
+            base.Awake();
             On<CleaverBatchedViewerRefreshEvt>().Do(OnBatchedRefresh);
             On<CleaverBatchedViewerRaycastEvt>().Do(OnBatchedRaycast);
-            On<DebugDrawEvt>().Do(OnDebugDraw);
+            On<DebugDrawEvt>().Do(OnDebugDrawCone);
         }
 
-        private void OnDebugDraw(ref DebugDrawEvt args) {
+        private void OnDebugDrawCone(ref DebugDrawEvt args) {
             if (!isActiveAndEnabled) return;
             var draw = args.drawer;
             using (draw.Scope(Color.red, Matrix4x4.TRS(position, rotation, Vector3.one))) {
@@ -44,24 +44,25 @@ namespace Spookline.SPC.Cleaver {
 
         public void Update() {
             if (!eyeTransform) return;
-            //for (var i = 0; i < groupVisibility.Length; i++) { Debug.Log($"Group {i}: {groupVisibility[i]}"); }
+            // for (var i = 0; i < groupVisibility.Length; i++) { Debug.Log($"Group {i}: {groupVisibility[i]}"); }
         }
 
         private void OnBatchedRefresh(ref CleaverBatchedViewerRefreshEvt args) {
             if (!isActiveAndEnabled) return;
+            if (!eyeTransform) return;
             var lastPosition = position;
             var lastRotation = rotation;
             position = eyeTransform.position;
             rotation = eyeTransform.rotation;
 
-            _raycastCommands.Clear();
-            _raycastProxyIndices.Clear();
+            raycastCommands.Clear();
+            raycastProxyIndices.Clear();
             RefitArrays(args.environment);
 
             if (!SpacialHash.PosRot(lastPosition, position, lastRotation, rotation)) {
                 viewCone = SphereSectionQuery.FromDegrees(position, transform.forward, viewAngleDegrees, viewDistance);
 
-                var sectionJob = args.environment.QuerySections(position, (byte)cleaverMask, currentSections);
+                var sectionJob = args.environment.QuerySections(position, (byte)occlusionMask, currentSections);
                 args.batch.Add(sectionJob);
 
                 var batchJob = BroadPhase(args.environment);
@@ -71,16 +72,17 @@ namespace Spookline.SPC.Cleaver {
 
         private void OnBatchedRaycast(ref CleaverBatchedViewerRaycastEvt args) {
             if (!isActiveAndEnabled) return;
-            if (_raycastCommands.Length == 0) return;
+            if (raycastCommands.Length == 0) return;
 
             var batchHandle = RaycastCommand.ScheduleBatch(
-                _raycastCommands.AsArray(),
-                _raycastResults,
+                raycastCommands.AsArray(),
+                raycastResults,
                 32
             );
             var resultJob = new CleaverSphereSectionRaycastResultJob {
-                raycastResults = _raycastResults,
-                raycastProxyIndices = _raycastProxyIndices,
+                raycastResults = raycastResults,
+                raycastProxyIndices = raycastProxyIndices,
+                raycastCommands = raycastCommands,
                 proxyGroups = args.environment.proxyGroups,
                 proxies = args.environment.proxies,
                 groupVisibility = groupVisibility,
@@ -105,7 +107,7 @@ namespace Spookline.SPC.Cleaver {
                 query = viewCone,
                 viewerPoint = position,
                 viewerRadiusSq = nearDistance * nearDistance,
-                queryMask = (byte)cleaverMask,
+                queryMask = (byte)visibilityMask,
                 groupVisibility = groupVisibility,
                 proxyCoverage = proxyCoverage
             };
@@ -115,9 +117,9 @@ namespace Spookline.SPC.Cleaver {
                 samplePoints = env.samplePoints,
                 proxyCoverage = proxyCoverage,
                 viewerPoint = position,
-                layerMask = layerMask,
-                raycastCommands = _raycastCommands,
-                raycastProxyIndices = _raycastProxyIndices,
+                layerMask = env.GetMask(occlusionMask),
+                raycastCommands = raycastCommands,
+                raycastProxyIndices = raycastProxyIndices,
             };
 
             var groupsLength = env.proxyGroups.Length;

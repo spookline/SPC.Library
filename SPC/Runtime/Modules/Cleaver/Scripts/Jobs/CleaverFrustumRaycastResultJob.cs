@@ -12,6 +12,9 @@ namespace Spookline.SPC.Cleaver {
         public NativeArray<RaycastHit> raycastResults;
 
         [ReadOnly]
+        public NativeList<RaycastCommand> raycastCommands;
+
+        [ReadOnly]
         public NativeList<int> raycastProxyIndices;
 
         [ReadOnly]
@@ -29,18 +32,24 @@ namespace Spookline.SPC.Cleaver {
         public NativeHashSet<int> indirectHitProxies;
 
         public void Execute() {
-            if (raycastResults.Length == 0) return;
+            if (raycastCommands.Length == 0) return;
             queried.Clear();
             hitProxies.Clear();
             indirectHitProxies.Clear();
 
-            for (var i = 0; i < raycastProxyIndices.Length; i++) {
+            for (var i = 0; i < raycastCommands.Length; i++) {
                 var hit = raycastResults[i];
                 var proxyIdx = raycastProxyIndices[i];
                 var proxy = proxies[proxyIdx];
                 queried.Add(proxyIdx);
+
+                var command = raycastCommands[i];
+                var target = command.from + command.direction * command.distance;
+
                 if (!hit.colliderEntityId.IsValid() || proxy.query.ContainsPoint(hit.point)) {
-                    if (frustum.Intersects(hit.point)) { hitProxies.Add(proxyIdx); } else {
+                    if (frustum.Intersects(target)) {
+                        hitProxies.Add(proxyIdx);
+                    } else {
                         indirectHitProxies.Add(proxyIdx);
                     }
                 }
@@ -48,9 +57,12 @@ namespace Spookline.SPC.Cleaver {
 
             for (var groupIdx = 0; groupIdx < proxyGroups.Length; groupIdx++) {
                 var group = proxyGroups[groupIdx];
-                var hasMissed = false;
+                var hasMissed = true;
+                var hasQueried = false;
                 for (var i = 0; i < group.proxyCount; i++) {
                     var proxyIdx = group.proxyIndex + i;
+                    if (queried.Contains(proxyIdx)) hasQueried = true;
+
                     if (hitProxies.Contains(proxyIdx)) {
                         groupVisibility[groupIdx] |= ProxyGroupVisibility.Raycast;
                         hasMissed = false;
@@ -61,11 +73,8 @@ namespace Spookline.SPC.Cleaver {
                         groupVisibility[groupIdx] |= ProxyGroupVisibility.Raycast;
                         // Missed is still false here
                     }
-
-                    if (queried.Contains(proxyIdx)) hasMissed = true;
                 }
-
-                if (hasMissed) groupVisibility[groupIdx] |= ProxyGroupVisibility.Occluded;
+                if (hasMissed && hasQueried) groupVisibility[groupIdx] |= ProxyGroupVisibility.Occluded;
             }
         }
 
