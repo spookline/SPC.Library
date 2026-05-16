@@ -85,8 +85,8 @@ namespace Spookline.SPC.Cleaver {
         Contained = 1 << 7,
 
 
-        AnyNegative = Excluded | Culled | Occluded,
-        AnyPositive = VisibleFrustum | InBounds | SampleVisible | Contained
+        AllNegative = Excluded | Culled | Occluded,
+        AllPositive = VisibleFrustum | InBounds | SampleVisible | Contained
 
     }
 
