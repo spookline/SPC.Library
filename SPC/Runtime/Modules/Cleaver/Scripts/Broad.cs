@@ -4,6 +4,7 @@ using Unity.Burst;
 using Unity.Collections;
 using Unity.Jobs;
 using Unity.Mathematics;
+using UnityEngine;
 
 namespace Spookline.SPC.Cleaver {
 
@@ -115,7 +116,7 @@ namespace Spookline.SPC.Cleaver {
         public float viewerRadiusSq;
         public byte queryMask;
 
-        [WriteOnly]
+        [NativeDisableParallelForRestriction]
         public NativeArray<ProxyGroupVisibility> groupVisibility;
 
         [NativeDisableParallelForRestriction]
@@ -140,8 +141,8 @@ namespace Spookline.SPC.Cleaver {
             }
 
             groupVisibility[groupIndex] = viewerInsideGroup
-                ? ProxyGroupVisibility.Contained | ProxyGroupVisibility.Visible
-                : ProxyGroupVisibility.Visible;
+                ? ProxyGroupVisibility.InBounds | ProxyGroupVisibility.VisibleFrustum
+                : ProxyGroupVisibility.VisibleFrustum;
 
             var start = group.proxyIndex;
             var end = start + group.proxyCount;
@@ -150,7 +151,8 @@ namespace Spookline.SPC.Cleaver {
                 var proxy = proxies[i];
 
                 if (proxy.query.DistanceSqToPoint(viewerPoint) <= viewerRadiusSq) {
-                    proxyCoverage[i] = 1f;
+                    proxyCoverage[i] = 2f;
+                    groupVisibility[groupIndex] |= ProxyGroupVisibility.SampleVisible | ProxyGroupVisibility.Contained;
                     continue;
                 }
 
@@ -160,7 +162,7 @@ namespace Spookline.SPC.Cleaver {
                     continue;
                 }
 
-                proxyCoverage[i] = 0f;
+                proxyCoverage[i] = -1f;
             }
         }
 
@@ -169,7 +171,130 @@ namespace Spookline.SPC.Cleaver {
             var end = start + group.proxyCount;
 
             for (var i = start; i < end; i++) {
-                proxyCoverage[i] = 0f;
+                proxyCoverage[i] = -1f;
+            }
+        }
+
+    }
+
+    public struct RaycastAdditionalData {
+
+        public int proxyIndex;
+        public int groupIndex;
+
+    }
+
+    [BurstCompile(FloatMode = FloatMode.Fast, OptimizeFor = OptimizeFor.Performance)]
+    public struct CleaverFrustumProxyRaycastCommandJob : IJob {
+
+        [ReadOnly]
+        public NativeArray<CleaverProxyData> proxies;
+
+        [ReadOnly]
+        public NativeArray<float3> samplePoints;
+
+        [ReadOnly]
+        public NativeArray<float> proxyCoverage;
+
+        public float3 viewerPoint;
+        public int layerMask;
+
+        [WriteOnly]
+        public NativeList<RaycastCommand> raycastCommands;
+
+        [WriteOnly]
+        public NativeList<int> raycastProxyIndices;
+
+        public void Execute() {
+            raycastCommands.Clear();
+            raycastProxyIndices.Clear();
+
+            for (var i = 0; i < proxies.Length; i++) {
+                var coverage = proxyCoverage[i];
+
+                if (coverage <= 0f || coverage > 1f)
+                    continue;
+
+                var proxy = proxies[i];
+                var pointStart = proxy.pointIndex;
+                var pointEnd = pointStart + proxy.pointCount;
+
+                for (var pointIdx = pointStart; pointIdx < pointEnd; pointIdx++) {
+                    var targetPoint = samplePoints[pointIdx];
+                    var direction = targetPoint - viewerPoint;
+                    var distance = math.length(direction);
+
+                    if (distance < 0.001f) continue;
+
+                    raycastCommands.Add(new RaycastCommand(
+                        viewerPoint,
+                        math.normalize(direction),
+                        new QueryParameters { layerMask = layerMask },
+                        distance
+                    ));
+
+                    raycastProxyIndices.Add(i);
+                }
+            }
+        }
+    }
+
+    [BurstCompile(FloatMode = FloatMode.Fast, OptimizeFor = OptimizeFor.Performance)]
+    public struct CleaverFrustumProxyRaycastResultJob : IJob {
+
+        [ReadOnly]
+        public NativeArray<RaycastHit> raycastResults;
+
+        [ReadOnly]
+        public NativeArray<int> raycastProxyIndices;
+
+        [ReadOnly]
+        public NativeArray<CleaverProxyGroupData> proxyGroups;
+
+        [ReadOnly]
+        public NativeArray<CleaverProxyData> proxies;
+
+        public NativeArray<ProxyGroupVisibility> groupVisibility;
+
+        public void Execute() {
+            if (raycastResults.Length == 0)
+                return;
+
+            var hitProxies = new NativeHashSet<int>(proxies.Length, Allocator.Temp);
+            var queried = new NativeHashSet<int>(proxies.Length, Allocator.Temp);
+
+            try {
+                for (var i = 0; i < raycastResults.Length; i++) {
+                    var hit = raycastResults[i];
+                    var proxyIdx = raycastProxyIndices[i];
+                    var proxy = proxies[proxyIdx];
+                    queried.Add(proxyIdx);
+                    if (!hit.colliderEntityId.IsValid() || proxy.query.ContainsPoint(hit.point)) {
+                        hitProxies.Add(proxyIdx);
+                    }
+                }
+
+                for (var groupIdx = 0; groupIdx < proxyGroups.Length; groupIdx++) {
+                    var group = proxyGroups[groupIdx];
+                    var hasMissed = false;
+                    for (var i = 0; i < group.proxyCount; i++) {
+                        var proxyIdx = group.proxyIndex + i;
+                        if (hitProxies.Contains(proxyIdx)) {
+                            groupVisibility[groupIdx] |= ProxyGroupVisibility.SampleVisible;
+                            hasMissed = false;
+                            break;
+                        }
+
+                        if (queried.Contains(proxyIdx)) hasMissed = true;
+                    }
+
+                    if (hasMissed) groupVisibility[groupIdx] |= ProxyGroupVisibility.Occluded;
+
+                }
+
+            } finally {
+                hitProxies.Dispose();
+                queried.Dispose();
             }
         }
 
