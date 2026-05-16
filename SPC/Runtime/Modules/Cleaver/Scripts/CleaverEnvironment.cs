@@ -103,11 +103,19 @@ namespace Spookline.SPC.Cleaver {
                 // Perform refresh pass to perform structured state consumption
                 var jobs = new NativeList<JobHandle>(Allocator.TempJob);
                 try {
-                    var evt = new CleaverBatchedViewerRefreshEvt {
+                    var refreshEvt = new CleaverBatchedViewerRefreshEvt {
                         environment = this,
                         batch = jobs
                     };
-                    Evt.RaiseSafe(ref evt);
+                    Evt.RaiseSafe(ref refreshEvt);
+                    if (!jobs.IsEmpty) JobHandle.CompleteAll(jobs.AsArray());
+                    jobs.Clear();
+
+                    var raycastEvt = new CleaverBatchedViewerRaycastEvt {
+                        environment = this,
+                        batch = jobs
+                    };
+                    Evt.RaiseSafe(ref raycastEvt);
                     if (!jobs.IsEmpty) JobHandle.CompleteAll(jobs.AsArray());
                 } finally { jobs.Dispose(); }
             }
@@ -413,6 +421,13 @@ namespace Spookline.SPC.Cleaver {
     }
 
     public struct CleaverBatchedViewerRefreshEvt : Evt<CleaverBatchedViewerRefreshEvt> {
+
+        public CleaverEnvironment environment;
+        public NativeList<JobHandle> batch;
+
+    }
+
+    public struct CleaverBatchedViewerRaycastEvt : Evt<CleaverBatchedViewerRaycastEvt> {
 
         public CleaverEnvironment environment;
         public NativeList<JobHandle> batch;

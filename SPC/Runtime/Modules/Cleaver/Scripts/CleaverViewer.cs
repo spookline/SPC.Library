@@ -35,8 +35,18 @@ namespace Spookline.SPC.Cleaver {
         [NonSerialized]
         public NativeArray<float> proxyCoverage;
 
+        [NonSerialized]
+        private NativeArray<RaycastHit> _raycastResults;
+
+        [NonSerialized]
+        private NativeList<RaycastCommand> _raycastCommands;
+
+        [NonSerialized]
+        private NativeList<int> _raycastProxyIndices;
+
         private void Awake() {
             On<CleaverBatchedViewerRefreshEvt>().Do(OnBatchedRefresh);
+            On<CleaverBatchedViewerRaycastEvt>().Do(OnBatchedRaycast);
         }
 
 
@@ -54,6 +64,7 @@ namespace Spookline.SPC.Cleaver {
             //
             //     RefreshSections();
             // }
+            for (var i = 0; i < groupVisibility.Length; i++) { Debug.Log($"Group {i}: {groupVisibility[i]}"); }
         }
 
         private void OnBatchedRefresh(ref CleaverBatchedViewerRefreshEvt args) {
@@ -62,28 +73,47 @@ namespace Spookline.SPC.Cleaver {
             position = trackedCamera.transform.position;
             rotation = trackedCamera.transform.rotation;
 
+            _raycastCommands.Clear();
+            _raycastProxyIndices.Clear();
+            RefitArrays(args.environment);
+
             if (!SpacialHash.PosRot(lastPosition, position, lastRotation, rotation)) {
                 trackedCamera.CalculateFrustum6(ref frustum);
                 worldToProjectionMatrix = trackedCamera.CalculateWorldToProjectionMatrix();
 
-                var job = args.environment.QuerySections(position, (byte)cleaverMask, currentSections);
-                args.batch.Add(job);
+                var sectionJob = args.environment.QuerySections(position, (byte)cleaverMask, currentSections);
+                args.batch.Add(sectionJob);
+
+                var batchJob = BroadPhase(args.environment);
+                args.batch.Add(batchJob);
             }
         }
 
-        [Button]
-        public void RefineProxyVisibilityWithRaycasts() {
-            var env = CleaverEnvironment.Instance;
-            if (env == null || env.proxyGroups.Length == 0) {
-                Debug.LogWarning("CleaverEnvironment not available or no proxy groups");
-                return;
-            }
+        private void OnBatchedRaycast(ref CleaverBatchedViewerRaycastEvt args) {
+            if (_raycastCommands.Length == 0) return;
+            Debug.Log($"Scheduling { _raycastCommands.Length} raycasts");
 
+            var batchHandle = RaycastCommand.ScheduleBatch(
+                _raycastCommands.AsArray(),
+                _raycastResults,
+                32
+                //, dependsOn: commandHandle
+            );
+            var resultJob = new CleaverProxyRaycastResultJob {
+                raycastResults = _raycastResults,
+                raycastProxyIndices = _raycastProxyIndices,
+                proxyGroups = args.environment.proxyGroups,
+                proxies = args.environment.proxies,
+                groupVisibility = groupVisibility
+            };
+            var resultHandle = resultJob.Schedule(batchHandle);
+            args.batch.Add(resultHandle);
+        }
+
+        private void RefitArrays(CleaverEnvironment env) {
             if (!groupVisibility.IsCreated || groupVisibility.Length != env.proxyGroups.Length) {
                 if (groupVisibility.IsCreated) groupVisibility.Dispose();
                 groupVisibility = new NativeArray<ProxyGroupVisibility>(env.proxyGroups.Length, Allocator.Persistent);
-            } else {
-                for (var i = 0; i < groupVisibility.Length; i++) { groupVisibility[i] = ProxyGroupVisibility.None; }
             }
 
             if (!proxyCoverage.IsCreated || proxyCoverage.Length != env.proxies.Length) {
@@ -91,70 +121,46 @@ namespace Spookline.SPC.Cleaver {
                 proxyCoverage = new NativeArray<float>(env.proxies.Length, Allocator.Persistent);
             }
 
-            var raycastCommands = new NativeList<RaycastCommand>(Allocator.TempJob);
-            var raycastProxyIndices = new NativeList<int>(Allocator.TempJob);
-
-            try {
-                var broadPhaseJob = new CleaverFrustumProxyBroadPhaseJob {
-                    proxyGroups = env.proxyGroups,
-                    proxies = env.proxies,
-                    frustum = frustum,
-                    viewMatrix = worldToProjectionMatrix,
-                    viewerPoint = position,
-                    viewerRadiusSq = nearDistance * nearDistance,
-                    queryMask = (byte)cleaverMask,
-                    groupVisibility = groupVisibility,
-                    proxyCoverage = proxyCoverage
-                };
-
-                var broadPhaseHandle = broadPhaseJob.Schedule(env.proxyGroups.Length, 16);
-                broadPhaseHandle.Complete();
-
-                var commandJob = new CleaverFrustumProxyRaycastCommandJob {
-                    proxies = env.proxies,
-                    samplePoints = env.samplePoints,
-                    proxyCoverage = proxyCoverage,
-                    viewerPoint = position,
-                    layerMask = layerMask,
-                    raycastCommands = raycastCommands,
-                    raycastProxyIndices = raycastProxyIndices
-                };
-
-                var commandHandle = commandJob.Schedule();
-                commandHandle.Complete();
-
-                if (raycastCommands.Length == 0) {
-                    Debug.Log("Broad phase complete, no raycasts needed.");
-                    return;
-                }
-
-                var raycastResults = new NativeArray<RaycastHit>(raycastCommands.Length, Allocator.TempJob);
-                try {
-                    var batchHandle = RaycastCommand.ScheduleBatch(raycastCommands.AsArray(), raycastResults, 32);
-                    batchHandle.Complete();
-
-                    var resultJob = new CleaverFrustumProxyRaycastResultJob {
-                        raycastResults = raycastResults,
-                        raycastProxyIndices = raycastProxyIndices.AsArray(),
-                        proxyGroups = env.proxyGroups,
-                        proxies = env.proxies,
-                        groupVisibility = groupVisibility
-                    };
-
-                    var resultHandle = resultJob.Schedule();
-                    resultHandle.Complete();
-
-                    Debug.Log(
-                        $"Raycast refinement complete: {raycastCommands.Length} raycasts executed, {raycastResults.Length} results processed."
-                    );
-
-                    // Print group results
-                    for (var i = 0; i < groupVisibility.Length; i++) { Debug.Log($"Group {i}: {groupVisibility[i]}"); }
-                } finally { raycastResults.Dispose(); }
-            } finally {
-                raycastCommands.Dispose();
-                raycastProxyIndices.Dispose();
+            if (!_raycastResults.IsCreated || _raycastResults.Length != env.samplePoints.Length) {
+                if (_raycastResults.IsCreated) _raycastResults.Dispose();
+                _raycastResults = new NativeArray<RaycastHit>(env.samplePoints.Length, Allocator.Persistent);
             }
+        }
+
+        private JobHandle BroadPhase(CleaverEnvironment env) {
+            for (var i = 0; i < groupVisibility.Length; i++) { groupVisibility[i] = ProxyGroupVisibility.None; }
+
+            var broadPhaseJob = new CleaverFrustumProxyBroadPhaseJob {
+                proxyGroups = env.proxyGroups,
+                proxies = env.proxies,
+                frustum = frustum,
+                viewMatrix = worldToProjectionMatrix,
+                viewerPoint = position,
+                viewerRadiusSq = nearDistance * nearDistance,
+                queryMask = (byte)cleaverMask,
+                groupVisibility = groupVisibility,
+                proxyCoverage = proxyCoverage
+            };
+
+            var broadPhaseHandle = broadPhaseJob.Schedule(env.proxyGroups.Length, 128);
+
+            var commandJob = new CleaverProxyRaycastCommandJob {
+                proxies = env.proxies,
+                samplePoints = env.samplePoints,
+                proxyCoverage = proxyCoverage,
+                viewerPoint = position,
+                layerMask = layerMask,
+                raycastCommands = _raycastCommands,
+                raycastProxyIndices = _raycastProxyIndices,
+            };
+
+            return commandJob.Schedule(broadPhaseHandle);
+        }
+
+        protected override void OnEnable() {
+            base.OnEnable();
+            _raycastCommands = new NativeList<RaycastCommand>(Allocator.Persistent);
+            _raycastProxyIndices = new NativeList<int>(Allocator.Persistent);
         }
 
         protected override void OnDisable() {
@@ -162,6 +168,9 @@ namespace Spookline.SPC.Cleaver {
             if (proxyCoverage.IsCreated) proxyCoverage.Dispose();
             if (groupVisibility.IsCreated) groupVisibility.Dispose();
             if (sectionVisibility.IsCreated) sectionVisibility.Dispose();
+            if (_raycastResults.IsCreated) _raycastResults.Dispose();
+            if (_raycastCommands.IsCreated) _raycastCommands.Dispose();
+            if (_raycastProxyIndices.IsCreated) _raycastProxyIndices.Dispose();
         }
 
     }

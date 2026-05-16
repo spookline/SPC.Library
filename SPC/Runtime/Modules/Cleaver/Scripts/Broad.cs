@@ -177,15 +177,8 @@ namespace Spookline.SPC.Cleaver {
 
     }
 
-    public struct RaycastAdditionalData {
-
-        public int proxyIndex;
-        public int groupIndex;
-
-    }
-
     [BurstCompile(FloatMode = FloatMode.Fast, OptimizeFor = OptimizeFor.Performance)]
-    public struct CleaverFrustumProxyRaycastCommandJob : IJob {
+    public struct CleaverProxyRaycastCommandJob : IJob {
 
         [ReadOnly]
         public NativeArray<CleaverProxyData> proxies;
@@ -212,8 +205,7 @@ namespace Spookline.SPC.Cleaver {
             for (var i = 0; i < proxies.Length; i++) {
                 var coverage = proxyCoverage[i];
 
-                if (coverage <= 0f || coverage > 1f)
-                    continue;
+                if (coverage is <= 0f or > 1f) continue;
 
                 var proxy = proxies[i];
                 var pointStart = proxy.pointIndex;
@@ -240,13 +232,13 @@ namespace Spookline.SPC.Cleaver {
     }
 
     [BurstCompile(FloatMode = FloatMode.Fast, OptimizeFor = OptimizeFor.Performance)]
-    public struct CleaverFrustumProxyRaycastResultJob : IJob {
+    public struct CleaverProxyRaycastResultJob : IJob {
 
         [ReadOnly]
         public NativeArray<RaycastHit> raycastResults;
 
         [ReadOnly]
-        public NativeArray<int> raycastProxyIndices;
+        public NativeList<int> raycastProxyIndices;
 
         [ReadOnly]
         public NativeArray<CleaverProxyGroupData> proxyGroups;
@@ -264,7 +256,7 @@ namespace Spookline.SPC.Cleaver {
             var queried = new NativeHashSet<int>(proxies.Length, Allocator.Temp);
 
             try {
-                for (var i = 0; i < raycastResults.Length; i++) {
+                for (var i = 0; i < raycastProxyIndices.Length; i++) {
                     var hit = raycastResults[i];
                     var proxyIdx = raycastProxyIndices[i];
                     var proxy = proxies[proxyIdx];
