@@ -96,10 +96,18 @@ namespace Spookline.SPC.UI {
 
           completionText = "";
           var result = system.Complete(updated, widget.style);
-          if (result.completionItems.Count == 1)
-            ReplaceCurrentToken(result.completionItems[0]);
-          else
-            completionText = string.Join(" ", result.completionItems.ToArray());
+          switch (result.completionItems.Count) {
+            case 1: ReplaceCurrentToken(result.completionItems[0]); break;
+            case > 1: {
+              var lcp = GetLongestCommonPrefix(result.completionItems);
+              var lastSpace = updated.LastIndexOf(' ');
+              var currentToken = lastSpace < 0 ? updated : updated[(lastSpace + 1)..];
+              if (lcp.Length > currentToken.Length) { ReplaceCurrentToken(lcp, false); }
+
+              completionText = string.Join(" ", result.completionItems.ToArray());
+              break;
+            }
+          }
 
           infoText = result.richInfoText ?? "";
           completionText = completionText.Trim();
@@ -128,18 +136,28 @@ namespace Spookline.SPC.UI {
         SetState();
       }
 
-      public void ReplaceCurrentToken(string completion) {
+      private void ReplaceCurrentToken(string completion, bool addSpace = true) {
         var input = controller.Value;
         var lastSpace = input.LastIndexOf(' ');
 
-        if (lastSpace < 0) controller.SetValue(completion + " ");
-        else controller.SetValue(input[..(lastSpace + 1)] + completion + " ");
-
-        // var unityField = consoleKey.Target.Element.Q<TextField>();
-        // unityField.textSelection.cursorIndex = controller.Value.Length;
-        // unityField.textSelection.selectIndex = controller.Value.Length;
+        var suffix = addSpace ? " " : "";
+        if (lastSpace < 0) controller.SetValue(completion + suffix);
+        else controller.SetValue(input[..(lastSpace + 1)] + completion + suffix);
       }
 
+
+      private static string GetLongestCommonPrefix(List<string> items) {
+        if (items == null || items.Count == 0) return "";
+        var prefix = items[0];
+        for (var i = 1; i < items.Count; i++) {
+          while (items[i].IndexOf(prefix, StringComparison.OrdinalIgnoreCase) != 0) {
+            prefix = prefix[..^1];
+            if (string.IsNullOrEmpty(prefix)) return "";
+          }
+        }
+
+        return prefix;
+      }
 
       private async UniTaskVoid OnSubmitted(string obj) {
         if (isExecuting || string.IsNullOrWhiteSpace(obj)) return;
@@ -172,9 +190,7 @@ namespace Spookline.SPC.UI {
 
           if (result.success) {
             if (result.hasMessage) {
-              if (result.message is ExtendedLogEntry entry) {
-                LogHistoryBuffer.Instance.Add(entry);
-              } else {
+              if (result.message is ExtendedLogEntry entry) { LogHistoryBuffer.Instance.Add(entry); } else {
                 var content = result.message.ToStringNullable();
                 LogHistoryBuffer.Instance.Add(
                   new ExtendedLogEntry {
