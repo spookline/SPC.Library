@@ -9,12 +9,12 @@ namespace Spookline.SPC.Common {
         private const int _twoDecMax = 256;
         private const int _oneDecMin = -1024;
         private const int _oneDecMax = 1024;
-        private const int _intMin = -1024;
-        private const int _intMax = 4096;
+        private const int _intMin = -4096;
+        private const int _intMax = 8192;
 
         private static string[] _twoDecimals; // -256.00 .. 256.00
         private static string[] _oneDecimal; // -1024.0 .. 1024.0
-        private static string[] _integers; // -1024 .. 4096
+        private static string[] _integers; // -4096 .. 8192
 
         private static bool _initialized;
         public static bool IsInitialized => _initialized;
