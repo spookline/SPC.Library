@@ -1,6 +1,8 @@
 using System;
 using Sirenix.OdinInspector;
 using Spookline.SPC.Common;
+using Spookline.SPC.Debugging;
+using Spookline.SPC.Draw;
 using Spookline.SPC.Ext;
 using Spookline.SPC.Geometry;
 using Unity.Mathematics;
@@ -42,6 +44,41 @@ namespace Spookline.SPC.Cleaver {
             Id = IdGenerator.NextId();
             Dirty = true;
             On<CleaverCheckForUpdateEvt>().Do(OnCheckForUpdate);
+            On<GizmoEvt>().Do(OnGizmos);
+        }
+
+        private void OnGizmos(ref GizmoEvt args) {
+            if (!args.HasFlag("cleaver_proxies")) return;
+            var env = CleaverEnvironment.Instance;
+            if (!env.groupLookup.TryGetValue(Id, out var idx)) return;
+            if (!env.proxyGroups.TryGetIndex(idx, out var group)) return;
+            if (args.Cull(group.bounds)) return;
+
+            if (args.DrawingPass(out var draw)) {
+                var magenta = Color.magenta;
+                using (draw.Scope(magenta)) draw.OrientedBox(group.bounds);
+                magenta.a = 0.33f;
+                using (draw.Scope(magenta))
+                    for (var i = 0; i < group.proxyCount; i++) {
+                        var id = group.proxyIndex + i;
+                        var proxyData = env.proxies[id];
+                        draw.OrientedBox(proxyData.query, false);
+                    }
+            }
+
+            if (args.WorldOverlayPass(out var world)) {
+                var count = 0;
+                for (var i = 0; i < group.proxyCount; i++) {
+                    var id = group.proxyIndex + i;
+                    var proxyData = env.proxies[id];
+                    count += proxyData.pointCount;
+                }
+
+                world.Box(Id, "ProxyGroup", group.bounds.Center, idx.FormatNonAlloc())
+                    .Field("Bounds", group.bounds.Extents, color: Color.magenta)
+                    .Field("Proxies", group.proxyCount, color: Color.magenta)
+                    .Field("Points", count, color: Color.orange);
+            }
         }
 
         [Button]

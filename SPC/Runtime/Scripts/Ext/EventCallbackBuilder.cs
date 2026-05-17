@@ -36,6 +36,10 @@ namespace Spookline.SPC.Ext {
             return With(EvtInterceptors.Throttle<T>(time));
         }
 
+        public EventCallbackBuilder<T> ActiveAndEnabled(Behaviour component) {
+            return With(EvtInterceptors.ActiveAndEnabled<T>(component));
+        }
+
         public HandlerRegistration<T> Do(EventHandler<T> action, int priority = 0, string debugName = null) {
 #if DEBUG
             if (debugName == null) {
@@ -47,6 +51,7 @@ namespace Spookline.SPC.Ext {
 
             var registration = _reactor.Subscribe(action, priority, debugName, _interceptor);
             _container.DisposeOnDestroy(registration);
+            registration.OnDisposeRemoveFrom(_container);
             return registration;
         }
 
@@ -61,6 +66,7 @@ namespace Spookline.SPC.Ext {
 
             var registration = _reactor.Subscribe(action, priority, debugName, _interceptor);
             _container.DisposeOnDestroy(registration);
+            registration.OnDisposeRemoveFrom(_container);
             return registration;
         }
 
@@ -79,6 +85,7 @@ namespace Spookline.SPC.Ext {
 #endif
             var registration = _reactor.SubscribeStream(action, priority, debugName, _interceptor);
             _container.DisposeOnDestroy(registration);
+            registration.OnDisposeRemoveFrom(_container);
             return registration;
         }
 
@@ -92,6 +99,7 @@ namespace Spookline.SPC.Ext {
 #endif
             var registration = _reactor.SubscribeOnce(action, priority, debugName, _interceptor);
             _container.DisposeOnDestroy(registration);
+            registration.OnDisposeRemoveFrom(_container);
             return registration;
         }
 

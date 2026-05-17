@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using Spookline.SPC.Events;
+using Spookline.SPC.Ext;
 using UnityEngine;
 
 namespace Spookline.SPC.Events {
@@ -139,7 +140,10 @@ namespace Spookline.SPC.Events {
 
                 for (var i = _registrations.Count - 1; i >= 0; i--) {
                     var registration = _registrations[i];
-                    if (registration.IsDisposed) _registrations.RemoveAt(i);
+                    if (registration.IsDisposed) {
+                        registration.Dispose();
+                        _registrations.RemoveAt(i);
+                    }
                 }
             }
         }
@@ -328,7 +332,30 @@ namespace Spookline.SPC.Events {
 
     }
 
-    public class HandlerRegistration<T> : IDisposable where T : Evt<T> {
+
+    public abstract class HandlerRegistration : IDisposable {
+
+        public int Priority { get; protected set; }
+        public string DebugName { get; protected set; }
+        public bool IsDisposed { get; protected set; }
+        public Action onDisposed;
+
+        public void OnDisposeRemoveFrom(IDisposableContainer container) {
+            var reference = new WeakReference<IDisposableContainer>(container);
+            onDisposed = () => {
+                if (reference.TryGetTarget(out var target)) { target.RemoveOnDestroyDisposal(this); }
+            };
+        }
+
+        public virtual void Dispose() {
+            onDisposed?.Invoke();
+            onDisposed = null;
+            IsDisposed = true;
+        }
+
+    }
+
+    public class HandlerRegistration<T> : HandlerRegistration, IDisposable where T : Evt<T> {
 
         public HandlerRegistration(
             EventReactor<T> reactor,
@@ -342,16 +369,15 @@ namespace Spookline.SPC.Events {
             Reactor = reactor;
         }
 
-        public int Priority { get; }
         public EventHandler<T> Handler { get; }
-        public string DebugName { get; }
         public EventReactor<T> Reactor { get; private set; }
-        public bool IsDisposed { get; private set; }
 
-        public void Dispose() {
+        public override void Dispose() {
+            base.Dispose();
+            onDisposed?.Invoke();
+            onDisposed = null;
             Reactor?.Unsubscribe(this);
             Reactor = null;
-            IsDisposed = true;
         }
 
         public void DisposeLater() {
@@ -361,9 +387,14 @@ namespace Spookline.SPC.Events {
 
     }
 
-    public class HandlerRegistrationComparer<T> : IComparer<HandlerRegistration<T>> where T : Evt<T> {
+    public class HandlerRegistrationComparer : IComparer<HandlerRegistration> {
 
-        public int Compare(HandlerRegistration<T> x, HandlerRegistration<T> y) {
+        public static readonly HandlerRegistrationComparer Instance = new();
+
+        public int Compare(HandlerRegistration x, HandlerRegistration y) {
+            if (ReferenceEquals(x, y)) return 0;
+            if (x == null) return -1;
+            if (y == null) return 1;
             return x.Priority.CompareTo(y.Priority);
         }
 

@@ -6,6 +6,7 @@ using HELIX.Widgets.Scrolling;
 using HELIX.Widgets.Signals;
 using HELIX.Widgets.Universal;
 using HELIX.Widgets.Universal.Styles;
+using Spookline.SPC.Debugging;
 using UnityEngine;
 using UnityEngine.UIElements;
 

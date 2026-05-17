@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using Sirenix.OdinInspector;
+using Spookline.SPC.Debugging;
 using Spookline.SPC.Events;
 using Spookline.SPC.Ext;
 using Unity.AI.Navigation;
@@ -129,7 +130,7 @@ namespace Spookline.SPC.Cleaver {
         }
 
         private void OnCollectDebugFlags(ref CollectDebugFlagsEvt args) {
-            args.Add("cleaver_portals", "cleaver_viewers");
+            args.Add("cleaver_portals", "cleaver_viewers", "cleaver_proxies", "cleaver_sections");
         }
 
         protected override void OnEnable() {
@@ -172,7 +173,7 @@ namespace Spookline.SPC.Cleaver {
                     point = point,
                     queryMask = mask,
                     result = results
-                }.Run(sections.Length);
+                }.Run();
                 return;
             }
 
@@ -195,7 +196,7 @@ namespace Spookline.SPC.Cleaver {
                     point = point,
                     queryMask = mask,
                     result = results
-                }.Schedule(sections.Length, batchSize, dependency);
+                }.Schedule(dependency);
             }
 
             var queue = new NativeQueue<ulong>(Allocator.TempJob);
@@ -227,7 +228,7 @@ namespace Spookline.SPC.Cleaver {
 
             var stopwatch = Stopwatch.StartNew();
             try {
-                var groupObjects = FindObjectsByType<CleaverProxyGroup>();
+                var groupObjects = FindObjectsByType<CleaverProxyGroup>(FindObjectsInactive.Exclude);
                 var proxyCount = groupObjects.Sum(region => region.GetProxyCount());
                 var proxyPointCount = groupObjects.Sum(region => region.GetProxySamplePointCount());
                 proxyGroups = new NativeArray<CleaverProxyGroupData>(groupObjects.Length, Allocator.Persistent);
@@ -271,7 +272,7 @@ namespace Spookline.SPC.Cleaver {
                     proxyGroups[i] = data;
                 }
 
-                var sectionObjects = FindObjectsByType<CleaverSection>();
+                var sectionObjects = FindObjectsByType<CleaverSection>(FindObjectsInactive.Exclude);
                 var volumeCount = sectionObjects.Sum(section => section.volumes.Length);
                 sections = new NativeArray<CleaverSectionData>(sectionObjects.Length, Allocator.Persistent);
                 volumes = new NativeArray<CleaverVolumeData>(volumeCount, Allocator.Persistent);
@@ -295,7 +296,7 @@ namespace Spookline.SPC.Cleaver {
                     volumeIndex += section.volumes.Length;
                 }
 
-                var portalObjects = FindObjectsByType<CleaverPortal>();
+                var portalObjects = FindObjectsByType<CleaverPortal>(FindObjectsInactive.Exclude);
                 foreach (var portal in portalObjects) {
                     portal.from?.portals.Add(portal);
                     portal.to?.portals.Add(portal);
@@ -402,9 +403,10 @@ namespace Spookline.SPC.Cleaver {
 
         public LayerMask GetMask(ByteMask mask) {
             var mapping = 0;
-            foreach (var current in maskMappings)
-                if (current.mask.HasFlag(mask))
-                    mapping |= current.included.value;
+            for (var index = 0; index < maskMappings.Length; index++) {
+                var current = maskMappings[index];
+                if ((current.mask & mask) == mask) mapping |= current.included.value;
+            }
 
             return mapping;
         }

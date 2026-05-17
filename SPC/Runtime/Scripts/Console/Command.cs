@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using Cysharp.Threading.Tasks;
 using Spookline.SPC.Console.Arguments;
+using Spookline.SPC.Debugging;
 
 namespace Spookline.SPC.Console {
     public abstract class Command {

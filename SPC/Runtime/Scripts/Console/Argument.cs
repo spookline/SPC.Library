@@ -198,23 +198,25 @@ namespace Spookline.SPC.Console {
         public static ArgumentPreset<LeafArgument<string>, string> Enum(
             this ArgumentPreset preset,
             Func<IEnumerable<string>> optionsFunc,
-            string defaultValue = null
+            string defaultValue = null,
+            bool strict = true
         ) {
             return new ArgumentPreset<LeafArgument<string>, string>(
                 preset,
-                new EnumStringArgument(optionsFunc, preset.name, "", defaultValue)
+                new EnumStringArgument(optionsFunc, preset.name, "", defaultValue, strict: strict)
             );
         }
 
         public static ArgumentPreset<LeafArgument<string>, string> Enum(
             this ArgumentPreset preset,
             IEnumerable<string> options,
-            string defaultValue = null
+            string defaultValue = null,
+            bool strict = true
         ) {
             var list = new List<string>(options);
             return new ArgumentPreset<LeafArgument<string>, string>(
                 preset,
-                new EnumStringArgument(() => list, preset.name, "", defaultValue)
+                new EnumStringArgument(() => list, preset.name, "", defaultValue, strict: strict)
             );
         }
 

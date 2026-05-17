@@ -27,22 +27,9 @@ namespace Spookline.SPC.FishNet {
             onDisable?.Invoke();
         }
 
-        protected virtual void OnDestroy() {
-            new SpookBehaviourDestroyEvt<TSelf>((TSelf)this).RaiseSafe();
-            foreach (var disposable in _disposables) disposable.Dispose();
-        }
-
         public event Action onStart;
         public event Action onEnable;
         public event Action onDisable;
-
-        public void DisposeOnDestroy(IDisposable disposable) {
-            _disposables.Add(disposable);
-        }
-
-        public void RemoveOnDestroyDisposal(IDisposable disposable) {
-            _disposables.Remove(disposable);
-        }
 
         public EventCallbackBuilder<T> On<T>() where T : Evt<T> {
             return new EventCallbackBuilder<T>(this);
@@ -50,6 +37,23 @@ namespace Spookline.SPC.FishNet {
 
         public EventCallbackBuilder<T> On<T>(EventReactor<T> reactor) where T : Evt<T> {
             return new EventCallbackBuilder<T>(this, reactor);
+        }
+
+        protected virtual void OnDestroy() {
+            new SpookBehaviourDestroyEvt<TSelf>((TSelf)this).RaiseSafe();
+            DisposableContainer.DisposeAll(_disposables);
+        }
+
+        public void DisposeOnDestroy(IDisposable disposable) {
+            DisposableContainer.Add(_disposables, disposable);
+        }
+
+        public void RemoveOnDestroyDisposal(IDisposable disposable) {
+            DisposableContainer.Remove(_disposables, disposable);
+        }
+
+        public void RaiseLocal<T>(ref T evt) where T : Evt<T> {
+            DisposableContainer.RaiseLocal(_disposables, ref evt);
         }
     }
 }

@@ -6,7 +6,7 @@ using Unity.Mathematics;
 namespace Spookline.SPC.Cleaver {
 
     [BurstCompile(FloatMode = FloatMode.Fast, OptimizeFor = OptimizeFor.Performance)]
-    public struct CleaverSectionPointContainmentJob : IJobParallelFor {
+    public struct CleaverSectionPointContainmentJob : IJob {
 
         [ReadOnly]
         public NativeArray<CleaverSectionData> sections;
@@ -18,22 +18,24 @@ namespace Spookline.SPC.Cleaver {
 
         public NativeHashSet<ulong> result;
 
-        public void Execute(int index) {
-            var section = sections[index];
+        public void Execute() {
+            for (var index = 0; index < sections.Length; index++) {
+                var section = sections[index];
 
-            if ((section.mask & queryMask) == 0) return;
-            if (!section.bounds.Contains(point)) return;
-            var contained = section.volumeCount == 0;
+                if ((section.mask & queryMask) == 0) continue;
+                if (!section.bounds.Contains(point)) continue;
+                var contained = section.volumeCount == 0;
 
-            for (var i = 0; i < section.volumeCount; i++) {
-                var volume = volumes[section.volumeIndex + i];
+                for (var i = 0; i < section.volumeCount; i++) {
+                    var volume = volumes[section.volumeIndex + i];
 
-                if (!volume.query.ContainsPoint(point)) continue;
-                contained = true;
-                break;
+                    if (!volume.query.ContainsPoint(point)) continue;
+                    contained = true;
+                    break;
+                }
+
+                if (contained) result.Add(section.id);
             }
-
-            if (contained) result.Add(section.id);
         }
 
     }

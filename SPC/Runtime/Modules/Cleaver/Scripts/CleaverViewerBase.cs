@@ -2,6 +2,7 @@ using System;
 using System.Text;
 using Sirenix.OdinInspector;
 using Spookline.SPC.Common;
+using Spookline.SPC.Debugging;
 using Spookline.SPC.Draw;
 using Spookline.SPC.Ext;
 using Unity.Collections;
@@ -69,19 +70,23 @@ namespace Spookline.SPC.Cleaver {
         }
 
         protected virtual void Awake() {
-            On<DebugDrawEvt>().Do(OnDebugDrawViewerBase);
+            On<GizmoEvt>().Do(OnGizmosViewerBase);
         }
 
-        private void OnDebugDrawViewerBase(ref DebugDrawEvt args) {
-            if (!isActiveAndEnabled) return;
+        protected abstract void RefreshTransforms();
+
+        private void OnGizmosViewerBase(ref GizmoEvt args) {
             if (!args.HasFlag("cleaver_viewers")) return;
-            var draw = args.drawer;
-            var env = CleaverEnvironment.Instance;
-            for (var i = 0; i < env.proxyGroups.Length; i++) {
-                var proxyGroup = env.proxyGroups[i];
-                if (!groupVisibility.TryGetIndex(i, out var group)) return;
-                using (draw.Scope(group.ToDebugColor()))
-                    draw.Line(proxyGroup.bounds.Center, position + new float3(0, -0.5f, 0));
+            RefreshTransforms();
+            if (args.DrawingPass(out var draw)) {
+                var env = CleaverEnvironment.Instance;
+                for (var i = 0; i < env.proxyGroups.Length; i++) {
+                    var proxyGroup = env.proxyGroups[i];
+                    if (!groupVisibility.TryGetIndex(i, out var group)) return;
+                    using (draw.Scope(group.ToDebugColor())) {
+                        draw.Line(proxyGroup.bounds.Center, position + new float3(0, -0.5f, 0));
+                    }
+                }
             }
         }
 

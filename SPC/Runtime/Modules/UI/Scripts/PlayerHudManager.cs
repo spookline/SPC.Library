@@ -5,6 +5,7 @@ using HELIX.Widgets;
 using HELIX.Widgets.Navigation;
 using HELIX.Widgets.Signals;
 using HELIX.Widgets.Universal;
+using Spookline.SPC.Common;
 using Spookline.SPC.Ext;
 using UnityEngine.UIElements;
 using Key = HELIX.Widgets.Key;
@@ -41,6 +42,24 @@ namespace Spookline.SPC.UI {
       Signal.SetValue(this);
     }
 
+    public void SetComponent(string id, Widget component) {
+      components.RemoveFirst(x => x.Item1 == id);
+      components.Add((id, component));
+      SetDirty();
+    }
+
+    public void SetComponent(string id, VisualElement element) {
+      var widget = new FactoryWidget<VisualElement> {
+        creator = () => element,
+        updater = _ => {}
+      };
+      SetComponent(id, widget);
+    }
+
+    public void RemoveComponent(string id) {
+      components.RemoveFirst(x => x.Item1 == id);
+      SetDirty();
+    }
   }
 
 

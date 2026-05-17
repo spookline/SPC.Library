@@ -1,3 +1,5 @@
+using Spookline.SPC.Debugging;
+
 namespace Spookline.SPC.Console.Commands {
     public class ClearHistoryCommand : Command {
 

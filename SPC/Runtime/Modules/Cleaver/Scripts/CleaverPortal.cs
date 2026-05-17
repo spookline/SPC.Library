@@ -3,8 +3,10 @@ using System.Collections;
 using System.Linq;
 using Sirenix.OdinInspector;
 using Spookline.SPC.Common;
+using Spookline.SPC.Debugging;
 using Spookline.SPC.Draw;
 using Spookline.SPC.Ext;
+using Spookline.SPC.Geometry;
 using Unity.AI.Navigation;
 using Unity.Mathematics;
 using UnityEngine;
@@ -73,23 +75,7 @@ namespace Spookline.SPC.Cleaver {
             UpdateNavmeshComponents();
 
             On<CleaverEnvironmentRebuiltEvt>().Do(OnEnvironmentRebuilt);
-            On<DebugDrawEvt>().Do(OnDebugDraw);
-        }
-
-        private void OnDrawGizmosSelected() {
-            var draw = Drawing.Gizmos;
-            if (from && to) {
-                var color = open ? Color.green : Color.red;
-                using (draw.Scope(color)) { draw.Line(from.transform.position, to.transform.position); }
-            }
-
-            var boxColor = Color.yellow;
-            using (draw.Scope(boxColor, transform.localToWorldMatrix)) {
-                draw.WireCube(new Vector3(0, size.y * 0.5f, 0), size);
-
-                boxColor.a = open ? 0.2f : 0.8f;
-                using (draw.Scope(boxColor)) { draw.Cube(new Vector3(0, size.y * 0.5f, 0), size); }
-            }
+            On<GizmoEvt>().Do(OnGizmos);
         }
 
 
@@ -109,6 +95,46 @@ namespace Spookline.SPC.Cleaver {
                 from = null;
                 to = null;
             }
+        }
+
+        private void OnGizmos(ref GizmoEvt args) {
+            if (!args.HasFlag("cleaver_portals") && args.type == GizmoType.Runtime) return;
+            var box = OrientedBox.FromWorldGroundAlignedBox(transform.position, size, transform.rotation);
+            if (args.DrawingPass(out var draw)) {
+                if (from && to) {
+                    var color = open ? Color.green : Color.red;
+                    using (draw.Scope(color)) { draw.Line(from.transform.position, to.transform.position); }
+                }
+            }
+
+            if (args.Cull(box) && args.type == GizmoType.Runtime) return;
+            if (args.DrawingPass(out draw)) {
+                var boxColor = Color.yellow;
+                using (draw.Scope(boxColor)) draw.OrientedBox(box);
+
+                boxColor.a = open ? 0.2f : 0.8f;
+                using (draw.Scope(boxColor)) { draw.OrientedBox(box, false); }
+            }
+
+            if (args.WorldOverlayPass(out var world)) {
+
+                var env = CleaverEnvironment.Instance;
+                if (!env.portalLookup.TryGetValue(IdTo, out var toIdx)) toIdx = -1;
+                if (!env.portalLookup.TryGetValue(IdFrom, out var fromIdx)) fromIdx = -1;
+
+                var id = IdTo;
+                if (IdTo == 0) id = IdFrom;
+                world.Box(id, "Portal", transform.position)
+                    .Field("From", fromIdx)
+                    .Field("To", toIdx)
+                    .Field("Open", open ? "Yes" : "No", color: open ? Color.green : Color.red);
+            }
+
+        }
+
+        private void OnDrawGizmosSelected() {
+            var evt = GizmoEvt.EditorGizmosSelected;
+            OnGizmos(ref evt);
         }
 
         public void UpdateNavmeshComponents() {
@@ -134,24 +160,6 @@ namespace Spookline.SPC.Cleaver {
             // TODO: Notify environment
             open = isOpen;
             UpdateNavmeshComponents();
-        }
-
-        private void OnDebugDraw(ref DebugDrawEvt args) {
-            if (!args.HasFlagOrDebugging("cleaver_portals")) return;
-
-            var draw = args.drawer;
-            if (from && to) {
-                var color = open ? Color.green : Color.red;
-                using (draw.Scope(color)) { draw.Line(from.transform.position, to.transform.position); }
-            }
-
-            var boxColor = Color.yellow;
-            using (draw.Scope(boxColor, transform.localToWorldMatrix)) {
-                draw.WireCube(new Vector3(0, size.y * 0.5f, 0), size);
-
-                boxColor.a = open ? 0.2f : 0.8f;
-                using (draw.Scope(boxColor)) { draw.Cube(new Vector3(0, size.y * 0.5f, 0), size); }
-            }
         }
 
         private void OnEnvironmentRebuilt(ref CleaverEnvironmentRebuiltEvt args) {

@@ -16,6 +16,13 @@ namespace Spookline.SPC.Events {
             };
         }
 
+        public static EventInterceptor<T> ActiveAndEnabled<T>(Behaviour component) where T : Evt<T> {
+            return handler => (ref T evt) => {
+                if (!component.isActiveAndEnabled) return;
+                handler?.Invoke(ref evt);
+            };
+        }
+
         public static EventInterceptor<T> LogInterceptor<T>(Action<string> logger) where T : Evt<T> {
             return handler => (ref T evt) => {
                 logger($"Event {typeof(T).Name} triggered with data: {evt}");

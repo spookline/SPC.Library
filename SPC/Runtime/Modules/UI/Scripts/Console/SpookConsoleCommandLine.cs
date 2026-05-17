@@ -7,6 +7,7 @@ using HELIX.Widgets.Modifiers;
 using HELIX.Widgets.Universal;
 using HELIX.Widgets.Universal.Controllers;
 using Spookline.SPC.Console;
+using Spookline.SPC.Debugging;
 using UnityEngine;
 using UnityEngine.UIElements;
 

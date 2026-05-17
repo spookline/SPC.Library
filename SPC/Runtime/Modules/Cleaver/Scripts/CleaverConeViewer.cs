@@ -1,4 +1,5 @@
 using Sirenix.OdinInspector;
+using Spookline.SPC.Debugging;
 using Spookline.SPC.Draw;
 using Spookline.SPC.Geometry;
 using Unity.Collections;
@@ -30,17 +31,21 @@ namespace Spookline.SPC.Cleaver {
             base.Awake();
             On<CleaverBatchedViewerRefreshEvt>().Do(OnBatchedRefresh);
             On<CleaverBatchedViewerRaycastEvt>().Do(OnBatchedRaycast);
-            On<DebugDrawEvt>().Do(OnDebugDrawCone);
+            On<GizmoEvt>().Do(OnGizmos);
         }
 
-        private void OnDebugDrawCone(ref DebugDrawEvt args) {
-            if (!isActiveAndEnabled) return;
+        protected override void RefreshTransforms() {
+            if (!eyeTransform) return;
+            position = eyeTransform.position;
+            rotation = eyeTransform.rotation;
+        }
+
+        private void OnGizmos(ref GizmoEvt args) {
             var draw = args.drawer;
             using (draw.Scope(Color.red, Matrix4x4.TRS(position, rotation, Vector3.one))) {
                 draw.SphereSection(Vector3.zero, Vector3.forward, viewDistance, viewAngleDegrees);
             }
         }
-
 
         public void Update() {
             if (!eyeTransform) return;

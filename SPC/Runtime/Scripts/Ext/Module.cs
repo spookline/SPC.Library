@@ -33,18 +33,11 @@ namespace Spookline.SPC.Ext {
 
         private readonly List<IDisposable> _disposables = new();
 
-        public void DisposeOnDestroy(IDisposable disposable) {
-            _disposables.Add(disposable);
-        }
-
-        public void RemoveOnDestroyDisposal(IDisposable disposable) {
-            _disposables.Remove(disposable);
-        }
 
         public virtual void Load() { }
 
         public virtual void Unload() {
-            foreach (var disposable in _disposables) disposable.Dispose();
+            DisposableContainer.DisposeAll(_disposables);
         }
 
         public virtual Type GetTypeDelegate() {
@@ -59,6 +52,21 @@ namespace Spookline.SPC.Ext {
             return new EventCallbackBuilder<T>(this, reactor);
         }
 
+        protected virtual void OnDestroy() {
+            DisposableContainer.DisposeAll(_disposables);
+        }
+
+        public void DisposeOnDestroy(IDisposable disposable) {
+            DisposableContainer.Add(_disposables, disposable);
+        }
+
+        public void RemoveOnDestroyDisposal(IDisposable disposable) {
+            DisposableContainer.Remove(_disposables, disposable);
+        }
+
+        public void RaiseLocal<T>(ref T evt) where T : Evt<T> {
+            DisposableContainer.RaiseLocal(_disposables, ref evt);
+        }
     }
 
     [ShowOdinSerializedPropertiesInInspector]

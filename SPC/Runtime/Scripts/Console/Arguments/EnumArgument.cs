@@ -29,15 +29,18 @@ namespace Spookline.SPC.Console.Arguments {
     public class EnumStringArgument : LeafArgument<string> {
 
         public Func<IEnumerable<string>> OptionsFunc { get; set; }
+        public bool Strict { get; set; } = true;
 
         public EnumStringArgument(
             Func<IEnumerable<string>> optionsFunc,
             string name,
             string description,
             string defaultValue = default,
-            bool isRequired = false
+            bool isRequired = false,
+            bool strict = true
         ) : base(name, description, defaultValue, isRequired) {
             OptionsFunc = optionsFunc;
+            Strict = strict;
         }
 
 
@@ -49,7 +52,7 @@ namespace Spookline.SPC.Console.Arguments {
         public override object Parse(string input) {
             var options = OptionsFunc();
             if (options.Contains(input, StringComparer.OrdinalIgnoreCase)) return input;
-            throw new ArgumentException($"Invalid value '{input}' for argument {Name}");
+            return Strict ? throw new ArgumentException($"Invalid value '{input}' for argument {Name}") : input;
         }
 
         public override List<string> GetCompletions(string input) {

@@ -5,6 +5,7 @@ using HELIX.Widgets;
 using HELIX.Widgets.Modifiers;
 using HELIX.Widgets.Signals;
 using HELIX.Widgets.Universal;
+using Spookline.SPC.Debugging;
 
 namespace Spookline.SPC.UI {
   public class SpookConsoleView : StatefulWidget<SpookConsoleView> {

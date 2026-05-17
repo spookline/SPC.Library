@@ -29,6 +29,12 @@ namespace Spookline.SPC.Cleaver {
             On<CleaverBatchedViewerRaycastEvt>().Do(OnBatchedRaycast);
         }
 
+        protected override void RefreshTransforms() {
+            if (!trackedCamera) return;
+            position = trackedCamera.transform.position;
+            rotation = trackedCamera.transform.rotation;
+        }
+
 
         public void Update() {
             if (!trackedCamera) return;

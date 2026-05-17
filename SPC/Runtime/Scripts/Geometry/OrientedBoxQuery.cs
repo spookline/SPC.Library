@@ -27,7 +27,7 @@ namespace Spookline.SPC.Geometry {
         public static implicit operator OrientedBoxQuery(in OrientedBox box) => new(box);
 
         public static implicit operator OrientedBox(in OrientedBoxQuery query) =>
-            new(query.center, query.halfExtent, quaternion.LookRotationSafe(query.axisZ, query.axisY));
+            new(query.center, query.halfExtent*2, quaternion.LookRotationSafe(query.axisZ, query.axisY));
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public readonly float3 ToLocal(float3 point) {

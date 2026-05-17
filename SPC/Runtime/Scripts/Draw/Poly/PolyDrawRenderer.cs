@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using Sirenix.OdinInspector;
+using Spookline.SPC.Debugging;
+using Spookline.SPC.Events;
 using Unity.Mathematics;
 using UnityEngine;
 using Object = UnityEngine.Object;
@@ -38,6 +40,9 @@ namespace Spookline.SPC.Draw {
         private readonly List<TimedCommand> _timedCommands = new(128);
         private readonly List<TimedLine> _timedLines = new(256);
         private bool _isDirty;
+
+        public bool keepAlive = false;
+        public bool autoRebuild = true;
 
 #if UNITY_EDITOR
         private double _lastEditorTime;
@@ -184,7 +189,7 @@ namespace Spookline.SPC.Draw {
 
             if (!_instance) _instance = this;
 
-            rebuildEveryFrame = false;
+            rebuildEveryFrame = true;
             gameObject.hideFlags = HideFlags.HideAndDontSave;
             hideFlags = HideFlags.HideAndDontSave;
 
@@ -210,7 +215,7 @@ namespace Spookline.SPC.Draw {
         }
 
         protected override void Update() {
-            if (Application.isPlaying) Tick();
+            if (Application.isPlaying && rebuildEveryFrame) Tick();
         }
 
 #if UNITY_EDITOR
@@ -221,17 +226,20 @@ namespace Spookline.SPC.Draw {
 
         protected override void BuildCommands(
             ref PolyDrawCommandWriter writer,
-            ref PolyDrawLineWriter lines
+            ref PolyDrawLineWriter lines,
+            bool isOffscreenFrame
         ) {
             var deltaTime = GetDeltaTime();
 
             CompactCommands(ref writer, deltaTime);
             CompactLines(ref lines, deltaTime);
 
-            _isDirty = false;
+            if (!isOffscreenFrame) {
+                _isDirty = false;
+            }
         }
 
-        private void Tick() {
+        public void Tick() {
             var hadEntriesBeforeBuild = HasTimedEntries;
 
             if (_isDirty || hadEntriesBeforeBuild) RebuildCommandsAndMesh();
@@ -239,7 +247,7 @@ namespace Spookline.SPC.Draw {
             if (HasTimedEntries) return;
 
             if (!hadEntriesBeforeBuild && !_isDirty) {
-                DestroyHost();
+                if (!keepAlive) DestroyHost();
                 return;
             }
         }

@@ -5,16 +5,17 @@ using Cysharp.Threading.Tasks;
 using Sirenix.OdinInspector;
 using Sirenix.Serialization;
 using Spookline.SPC.Console;
+using Spookline.SPC.Debugging;
 using Spookline.SPC.Draw;
 using Spookline.SPC.Events;
 using Spookline.SPC.Ext;
 using Spookline.SPC.Focus;
+using Spookline.SPC.Geometry;
 using UnityEngine;
 using UnityEngine.AddressableAssets;
 
 namespace Spookline.SPC {
     [HideMonoScript]
-
     [DefaultExecutionOrder(-500)]
     public partial class Globals : SerializedMonoBehaviour {
 
@@ -24,6 +25,9 @@ namespace Spookline.SPC {
         public List<IModule> modules = new();
 
         public Dictionary<Type, ModuleInstance> ModulesByType { get; } = new();
+
+        public IScreenOverlayAPI debugScreenOverlay = new NoOpScreenOverlayAPI();
+        public IWorldOverlayAPI debugWorldOverlay = new NoOpWorldOverlayAPI();
 
         public bool Started { get; private set; }
 
@@ -74,13 +78,15 @@ namespace Spookline.SPC {
             Started = false;
         }
 
+        private DateTime _lastDrawTime = DateTime.MinValue;
+        public int drawFrequency = 2;
+        public int screenOverlayFrequency = 2;
+        public int worldOverlayFrequency = 1;
+        public double debugRefreshInterval = 1 / 120.0;
+        private uint debugFrameCount = 0;
+
         private void LateUpdate() {
-            if (DebugDraw)
-                new DebugDrawEvt {
-                    drawer = Drawing.Poly(),
-                    flags = DebugFlags,
-                    debugging = Debugging
-                }.RaiseSafe();
+            DebugTick();
         }
 
         private void Update() {

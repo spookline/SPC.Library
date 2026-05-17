@@ -23,6 +23,8 @@ namespace Spookline.SPC.Draw {
         [SerializeField]
         public double refreshIntervalMs = 16.66f;
 
+        public bool skipRefresh = false;
+
         private NativeList<PolyDrawCommand> _commands;
         private NativeList<PolyDrawVertex> _directLineVertices;
 
@@ -87,21 +89,26 @@ namespace Spookline.SPC.Draw {
             _commands.Clear();
             _directLineVertices.Clear();
 
+            var offscreenFrame = false;
+            if (!skipRefresh) {
+                var currentTimeMillis = math.abs((DateTime.Now - _lastRefreshTime).TotalMilliseconds);
+                offscreenFrame = refreshIntervalMs > 0 && currentTimeMillis < refreshIntervalMs;
+            }
+
             var primitiveWriter = new PolyDrawCommandWriter(_commands);
             var lineWriter = new PolyDrawLineWriter(_directLineVertices);
+            BuildCommands(ref primitiveWriter, ref lineWriter, offscreenFrame);
 
-            BuildCommands(ref primitiveWriter, ref lineWriter);
-
-            var currentTimeMillis = math.abs((DateTime.Now - _lastRefreshTime).TotalMilliseconds);
-            if (refreshIntervalMs > 0 && currentTimeMillis < refreshIntervalMs) return;
+            if (offscreenFrame) return;
 
             ApplyCommandsToMesh();
-            _lastRefreshTime = DateTime.Now;
+            if (!skipRefresh) _lastRefreshTime = DateTime.Now;
         }
 
         protected abstract void BuildCommands(
             ref PolyDrawCommandWriter writer,
-            ref PolyDrawLineWriter lines
+            ref PolyDrawLineWriter lines,
+            bool isOffscreenFrame
         );
 
 
@@ -254,7 +261,6 @@ namespace Spookline.SPC.Draw {
                 meshIndexCountRef.Dispose();
                 wireVertexCountRef.Dispose();
             }
-
         }
 
         private void UploadMesh(
@@ -467,6 +473,7 @@ namespace Spookline.SPC.Draw {
                 for (var i = 0; i < source.Length; i++)
                     vertices[directLineDestinationOffset + i] = source[i];
             }
+
         }
 
     }

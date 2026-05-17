@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using HELIX.Widgets.Diagnostics;
 using HELIX.Widgets.Signals;
+using Spookline.SPC.Debugging;
 using Spookline.SPC.Events;
 
 namespace Spookline.SPC.UI {

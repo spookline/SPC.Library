@@ -2,8 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Sirenix.OdinInspector;
+using Spookline.SPC.Debugging;
 using Spookline.SPC.Draw;
 using Spookline.SPC.Events;
+using Spookline.SPC.Geometry;
 using UnityEngine;
 
 namespace Spookline.SPC {
@@ -25,11 +27,22 @@ namespace Spookline.SPC {
         public bool Debugging { get; set; }
 
         [ShowInInspector, HideInEditorMode]
-        public bool DebugDraw { get; set; } = true;
+        public bool DebugGizmos { get; private set; } = true;
+
+        [ShowInInspector, HideInEditorMode]
+        public bool DebugDraw { get; private set; } = true;
+
+        [ShowInInspector, HideInEditorMode]
+        public bool DebugScreenOverlay { get; private set; } = true;
+
+        [ShowInInspector, HideInEditorMode]
+        public bool DebugWorldOverlay { get; private set; } = true;
+
+        [NonSerialized]
+        public Camera debugCamera;
 
         public HashSet<string> DebugFlags { get; } = new();
         public HashSet<string> AvailableDebugFlags { get; } = new();
-
 
         [ShowInInspector, LabelText("Debug Flags"), HideInEditorMode]
         private ISet<string> EditorDebugFlags {
@@ -37,20 +50,43 @@ namespace Spookline.SPC {
             set => SetDebugFlags(value);
         }
 
+        private void CallFlagsChanged() =>
+            new DebugFlagsChangedEvt { flags = DebugFlags, debugging = Debugging }.Raise();
+
+        public void SetDebugDraw(bool value) {
+            DebugDraw = value;
+            CallFlagsChanged();
+        }
+
+        public void SetDebugGizmos(bool value) {
+            DebugGizmos = value;
+            CallFlagsChanged();
+        }
+
+        public void SetDebugScreenOverlay(bool value) {
+            DebugScreenOverlay = value;
+            CallFlagsChanged();
+        }
+
+        public void SetDebugWorldOverlay(bool value) {
+            DebugWorldOverlay = value;
+            CallFlagsChanged();
+        }
+
         public void SetDebugFlags(IEnumerable<string> flags) {
             DebugFlags.Clear();
             foreach (var flag in flags) DebugFlags.Add(flag);
-            new DebugFlagsChangedEvt { flags = DebugFlags, debugging = Debugging }.Raise();
+            CallFlagsChanged();
         }
 
         public void SetDebugFlag(string flag) {
             DebugFlags.Add(flag);
-            new DebugFlagsChangedEvt { flags = DebugFlags, debugging = Debugging }.Raise();
+            CallFlagsChanged();
         }
 
         public void RemoveDebugFlag(string flag) {
             DebugFlags.Remove(flag);
-            new DebugFlagsChangedEvt { flags = DebugFlags, debugging = Debugging }.Raise();
+            CallFlagsChanged();
         }
 
         public void ToggleDebugFlag(string flag) {
@@ -76,166 +112,55 @@ namespace Spookline.SPC {
             LogHistoryBuffer.Instance.AddLogMessage(condition, stackTrace, type);
         }
 
-    }
+        private void DebugTick() {
+            if (DebugGizmos) {
+                var cam = debugCamera ?? Camera.main;
+                Frustum6 frustum = default;
+                if (cam) cam.CalculateFrustum6(ref frustum);
+                var now = DateTime.Now;
 
-    public struct DebugFlagsChangedEvt : Evt<DebugFlagsChangedEvt> {
+                var refreshTime = Math.Abs((now - _lastDrawTime).TotalSeconds);
 
-        public HashSet<string> flags;
-        public bool debugging;
+                if (refreshTime > debugRefreshInterval) {
+                    _lastDrawTime = now;
+                    unchecked { debugFrameCount++; }
 
-    }
+                    var isDrawPass = (debugFrameCount + 1) % drawFrequency == 0 && DebugDraw;
+                    var isScreenOverlayPass = debugScreenOverlay != null && DebugScreenOverlay &&
+                                              debugFrameCount % screenOverlayFrequency == 0;
+                    var isWorldOverlayPass = debugWorldOverlay != null && DebugWorldOverlay &&
+                                             debugFrameCount % worldOverlayFrequency == 0;
 
-    public struct CollectDebugFlagsEvt : Evt<CollectDebugFlagsEvt> {
+                    if (isDrawPass) {
+                        var poly = PolyDrawRenderer.Instance;
+                        poly.keepAlive = true;
+                        poly.skipRefresh = true;
+                        poly.rebuildEveryFrame = false;
+                    }
 
-        public HashSet<string> flags;
+                    new GizmoEvt {
+                        type = GizmoType.Runtime,
+                        drawer = isDrawPass ? Drawing.Poly() : null,
+                        screenOverlay = isScreenOverlayPass ? debugScreenOverlay : null,
+                        worldOverlay = isWorldOverlayPass ? debugWorldOverlay : null,
+                        HasFrustum = cam,
+                        Frustum = frustum
+                    }.RaiseSafe();
 
-        public void Add(string flag) => flags.Add(flag);
-
-        public void Add(params string[] multiple) {
-            foreach (var flag in multiple) this.flags.Add(flag);
-        }
-
-    }
-
-    public struct DebugDrawEvt : Evt<DebugDrawEvt> {
-
-        public IDrawingAPI drawer;
-        public HashSet<string> flags;
-        public bool debugging;
-
-        public readonly bool HasFlag(string flag) => flags.Contains(flag);
-        public readonly bool HasFlagOrDebugging(string flag) => HasFlag(flag) || debugging;
-
-    }
-
-    public class LogHistoryBuffer {
-
-        public static LogHistoryBuffer Instance { get; } = new();
-
-        public readonly List<ExtendedLogEntry> messages = new(100);
-        public int maxMessages = 100;
-        public bool collapseRepeats = true;
-
-        public void AddLogMessage(string message, string stackTrace, LogType type) {
-            var entry = new ExtendedLogEntry(message) {
-                stackTrace = stackTrace,
-                type = LogTypeToExtLogType(type)
-            };
-            Add(entry);
-        }
-
-        public void Add(ExtendedLogEntry entry) {
-            new LogMessageReceivedEvt { entry = entry }.RaiseSafe();
-            if (UpdateAlike(entry)) return;
-            if (messages.Count >= maxMessages) messages.RemoveAt(0);
-            messages.Add(entry);
-            new LogHistoryChangedEvt { entry = entry, type = LogHistoryModificationType.Added }.RaiseSafe();
-        }
-
-        private bool UpdateAlike(ExtendedLogEntry entry) {
-            if (messages.Count == 0) return false;
-            for (var i = 0; i < messages.Count; i++) {
-                var message = messages[i];
-                if (!string.Equals(message.message, entry.message, StringComparison.Ordinal)) continue;
-                messages.RemoveAt(i);
-                message.stackTrace = entry.stackTrace;
-                message.type = entry.type;
-                if (message.repeatCount < int.MaxValue) message.repeatCount++;
-                messages.Add(message);
-                new LogHistoryChangedEvt {
-                    entry = message,
-                    type = LogHistoryModificationType.Repeated
-                }.RaiseSafe();
-                return true;
+                    if (isDrawPass) PolyDrawRenderer.InstanceOrNull?.Tick();
+                    if (isScreenOverlayPass) debugScreenOverlay.Tick();
+                    if (isWorldOverlayPass) debugWorldOverlay.Tick();
+                }
             }
 
-            return false;
+            if (!DebugDraw || !DebugGizmos) {
+                var poly = PolyDrawRenderer.InstanceOrNull;
+                if (!poly) return;
+                poly.keepAlive = false;
+                poly.skipRefresh = false;
+                poly.rebuildEveryFrame = true;
+            }
         }
-
-        public void SendRefreshHint() {
-            new LogHistoryChangedEvt {
-                type = LogHistoryModificationType.RefreshHint
-            }.RaiseSafe();
-        }
-
-
-        public void Clear() {
-            messages.Clear();
-            new LogHistoryChangedEvt {
-                type = LogHistoryModificationType.Cleared
-            }.RaiseSafe();
-        }
-
-        private static ExtLogType LogTypeToExtLogType(LogType type) {
-            return type switch {
-                LogType.Log => ExtLogType.Log,
-                LogType.Warning => ExtLogType.Warning,
-                LogType.Error => ExtLogType.Error,
-                LogType.Assert => ExtLogType.Assert,
-                LogType.Exception => ExtLogType.Exception,
-                _ => ExtLogType.Log
-            };
-        }
-
-    }
-
-    public interface ILogEvent { }
-
-    public struct LogMessageReceivedEvt : Evt<LogMessageReceivedEvt>, ILogEvent {
-
-        public ExtendedLogEntry entry;
-        public bool isRepeat;
-
-    }
-
-    public struct LogHistoryChangedEvt : Evt<LogHistoryChangedEvt>, ILogEvent {
-
-        public ExtendedLogEntry entry;
-        public LogHistoryModificationType type;
-
-    }
-
-    public enum LogHistoryModificationType {
-
-        Added = 0,
-        Repeated = 1,
-        Cleared = 2,
-        RefreshHint = 3,
-
-    }
-
-    public struct ExtendedLogEntry {
-
-        public string summary;
-        public string message;
-        public string stackTrace;
-        public ExtLogType type;
-        public int repeatCount;
-
-        public string GetFullText() => $"{message}\n\n{stackTrace}";
-
-        public ExtendedLogEntry(string message) : this() {
-            this.message = message;
-            summary = string.Join(
-                "\n",
-                message.Split('\n', 3).Take(2).Select(s => {
-                        if (s.Length > 128) return s[..128].TrimEnd() + "...";
-                        return s.Trim();
-                    }
-                )
-            );
-        }
-
-    }
-
-    public enum ExtLogType {
-
-        Log,
-        Warning,
-        Error,
-        Assert,
-        Exception,
-        Input
 
     }
 }
