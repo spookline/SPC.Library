@@ -41,6 +41,17 @@ namespace Spookline.SPC.Actor.FirstPerson {
         private void Update() {
             if (!Possessed) return;
             var mainTransform = Possessed.mainTransform;
+            var controller = _characterAttachmentAccessor.Value.controller;
+
+            Input = moveInput.action.ReadValue<Vector2>();
+            IsSprinting = sprintInput.action.IsPressed();
+            IsCrouching = crouchInput.action.IsPressed();
+
+            HandleCameraRotationInput();
+
+            if (syncMainTransform) {
+                mainTransform.rotation = Quaternion.Euler(0f, _yaw, 0f);
+            }
 
             // Ground check
             var isGrounded = Physics.SphereCast(
@@ -68,10 +79,6 @@ namespace Spookline.SPC.Actor.FirstPerson {
                 _hasLanded = false;
             }
 
-            Input = moveInput.action.ReadValue<Vector2>();
-            IsSprinting = sprintInput.action.IsPressed();
-            IsCrouching = crouchInput.action.IsPressed();
-
             HandleStamina();
 
             if (_lastSprint != IsSprinting) {
@@ -85,15 +92,20 @@ namespace Spookline.SPC.Actor.FirstPerson {
                 _lastSprint = IsSprinting;
             }
 
-            var controller = _characterAttachmentAccessor.Value.controller;
-
             // Apply horizontal movement
-            var direction = (mainTransform.forward * Input.y + mainTransform.right * Input.x).normalized;
-            direction.y = 0f;
+            var forward = mainTransform.forward;
+            var right = mainTransform.right;
+            forward.y = 0;
+            right.y = 0;
+
+            forward.Normalize();
+            right.Normalize();
+
+            var direction = Vector3.ClampMagnitude(forward * Input.y + right * Input.x, 1f);
 
             var desiredSpeed = _movementAttachmentAccessor.Value.moveSpeed;
             if (IsSprinting && !IsCrouching) desiredSpeed *= _movementAttachmentAccessor.Value.sprintSpeedMultiplier;
-            if (IsCrouching) desiredSpeed = _movementAttachmentAccessor.Value.crouchSpeedMultiplier;
+            if (IsCrouching) desiredSpeed *= _movementAttachmentAccessor.Value.crouchSpeedMultiplier;
 
             var targetVelocity = direction * desiredSpeed;
 
@@ -110,12 +122,10 @@ namespace Spookline.SPC.Actor.FirstPerson {
             );
             CurrentSpeed = _horizontalVelocity.magnitude;
 
-            controller.Move(_horizontalVelocity * Time.deltaTime);
-
             // Apply gravity
             var jumpPressed = jumpInput.action.WasPerformedThisFrame();
-
             var gravity = _characterAttachmentAccessor.Value.gravity;
+
             if (IsGrounded && _verticalVelocity < 0) {
                 _verticalVelocity = -2f;
             }
@@ -127,13 +137,11 @@ namespace Spookline.SPC.Actor.FirstPerson {
             }
 
             _verticalVelocity += gravity * Time.deltaTime;
-            controller.Move(new Vector3(0, _verticalVelocity, 0) * Time.deltaTime);
 
-            HandleCameraRotationInput();
+            var velocity = _horizontalVelocity;
+            velocity.y = _verticalVelocity;
 
-            // Sync main transform
-            if (!syncMainTransform) return;
-            mainTransform.rotation = Quaternion.Euler(0f, _yaw, 0f);
+            controller.Move(velocity * Time.deltaTime);
         }
 
 
