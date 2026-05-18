@@ -1,11 +1,13 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Dahomey.Cbor.ObjectModel;
 using Sirenix.OdinInspector;
 using Spookline.SPC.Debugging;
 using Spookline.SPC.Draw;
 using Spookline.SPC.Events;
 using Spookline.SPC.Geometry;
+using Spookline.SPC.Save;
 using UnityEngine;
 
 namespace Spookline.SPC {
@@ -54,38 +56,44 @@ namespace Spookline.SPC {
             new DebugFlagsChangedEvt { flags = DebugFlags, debugging = Debugging }.Raise();
 
         public void SetDebugDraw(bool value) {
+            if (value == DebugDraw) return;
             DebugDraw = value;
             CallFlagsChanged();
         }
 
         public void SetDebugGizmos(bool value) {
+            if (value == DebugGizmos) return;
             DebugGizmos = value;
             CallFlagsChanged();
         }
 
         public void SetDebugScreenOverlay(bool value) {
+            if (value == DebugScreenOverlay) return;
             DebugScreenOverlay = value;
             CallFlagsChanged();
         }
 
         public void SetDebugWorldOverlay(bool value) {
+            if (value == DebugWorldOverlay) return;
             DebugWorldOverlay = value;
             CallFlagsChanged();
         }
 
         public void SetDebugFlags(IEnumerable<string> flags) {
+            var newFlags = new HashSet<string>(flags);
+            if (newFlags.Intersect(DebugFlags).Count() == newFlags.Count) return;
             DebugFlags.Clear();
-            foreach (var flag in flags) DebugFlags.Add(flag);
+            foreach (var flag in newFlags) DebugFlags.Add(flag);
             CallFlagsChanged();
         }
 
         public void SetDebugFlag(string flag) {
-            DebugFlags.Add(flag);
+            if (!DebugFlags.Add(flag)) return;
             CallFlagsChanged();
         }
 
         public void RemoveDebugFlag(string flag) {
-            DebugFlags.Remove(flag);
+            if (!DebugFlags.Remove(flag)) return;
             CallFlagsChanged();
         }
 
@@ -160,6 +168,44 @@ namespace Spookline.SPC {
                 poly.skipRefresh = false;
                 poly.rebuildEveryFrame = true;
             }
+        }
+
+    }
+
+    public class DebugConfig {
+
+        public const string Key = "debugging";
+
+        public HashSet<string> flags;
+
+        public void Load() {
+            var globals = Globals.Instance;
+            if (globals) { flags = globals.DebugFlags; }
+        }
+
+        public void Apply() {
+            var globals = Globals.Instance;
+            if (globals) { globals.SetDebugFlags(flags); }
+        }
+
+        public static CborObject Encode(DebugConfig config) {
+            return new CborObject {
+                ["flags"] = new CborArray(config.flags.Select(x => (CborValue)x)),
+            };
+        }
+
+        public static DebugConfig Decode(CborObject cbor) {
+            var flags = new HashSet<string>();
+            if (cbor.TryGetValue("flags", out var value)) {
+                if (value is CborArray array) {
+                    foreach (var v in array) { flags.Add(v.Value<string>()); }
+                }
+            }
+
+            var config = new DebugConfig {
+                flags = flags
+            };
+            return config;
         }
 
     }

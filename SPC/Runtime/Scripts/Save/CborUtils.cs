@@ -1,5 +1,6 @@
 using System;
 using Dahomey.Cbor.ObjectModel;
+using UnityEngine;
 
 namespace Spookline.SPC.Save {
     public static class CborUtils {
@@ -7,7 +8,8 @@ namespace Spookline.SPC.Save {
         public static T ValueOrDefault<T>(this CborValue value, T defaultValue) {
             try {
                 return value.Value<T>();
-            } catch {
+            } catch (Exception e) {
+                Debug.LogException(e);
                 return defaultValue;
             }
         }
