@@ -35,9 +35,14 @@ namespace Spookline.SPC.Console.Commands {
 
             var builder = new StringBuilder();
             builder.Append($"Debugging: {instance.Debugging}");
-            builder.Append($", Debug Gizmos: {instance.DebugGizmos}");
-            builder.AppendLine($", Flags: {instance.DebugFlags.JoinStringsGroup()}");
-
+            builder.AppendLine($"Flags: {instance.DebugFlags.JoinStringsGroup()}");
+            builder.AppendLine($"Gizmos: {instance.DebugGizmos}");
+            if (instance.DebugGizmos) {
+                builder.AppendLine($"  Interval: {1f / instance.debugRefreshInterval:F2} fps");
+                builder.AppendLine($"  Draw: {instance.DebugDraw} (Freq: {instance.drawFrequency})");
+                builder.AppendLine($"  Screen Overlay: {instance.DebugScreenOverlay} (Freq: {instance.screenOverlayFrequency})");
+                builder.AppendLine($"  World Overlay: {instance.DebugWorldOverlay} (Freq: {instance.worldOverlayFrequency})");
+            }
             builder.AppendLine($"Active PolyDrawRenderer: {(bool)PolyDrawRenderer.InstanceOrNull}");
             return CommandResult.Successful(builder.ToString());
         }

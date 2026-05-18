@@ -193,17 +193,14 @@ namespace Spookline.SPC {
 
         public static CborObject Encode(DebugConfig config) {
             return new CborObject {
-                ["flags"] = new CborArray(config.flags.Select(x => (CborValue)x)),
+                ["flags"] = config.flags.ToCbor(x => x.ToCbor())
             };
         }
 
         public static DebugConfig Decode(CborObject cbor) {
+            var reader = new DataReader(cbor);
             var flags = new HashSet<string>();
-            if (cbor.TryGetValue("flags", out var value)) {
-                if (value is CborArray array) {
-                    foreach (var v in array) { flags.Add(v.Value<string>()); }
-                }
-            }
+            reader.MemberOptional("flags")?.Collection(flags, v => v.Value<string>());
 
             var config = new DebugConfig {
                 flags = flags

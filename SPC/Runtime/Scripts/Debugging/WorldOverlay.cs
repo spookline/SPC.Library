@@ -13,7 +13,6 @@ namespace Spookline.SPC.Debugging {
 
         public WorldOverlayBuilder Field(string label, string value, string unit = null, Color? color = null) {
             if (id == 0 || api == null) return this;
-            ;
             api.UpdateField(id, label, value, unit, color);
             return this;
         }
@@ -26,14 +25,12 @@ namespace Spookline.SPC.Debugging {
             Color? color = null
         ) {
             if (id == 0 || api == null) return this;
-            ;
             api.UpdateField(id, label, value, decimals, unit, color);
             return this;
         }
 
         public WorldOverlayBuilder Field(string label, int value, string unit = null, Color? color = null) {
             if (id == 0 || api == null) return this;
-            ;
             api.UpdateField(id, label, value, unit, color);
             return this;
         }

@@ -3,17 +3,17 @@ using Dahomey.Cbor.ObjectModel;
 using Spookline.SPC.Events;
 
 namespace Spookline.SPC.Save {
-    public abstract class BaseDataReadEvt<T> : AsyncChainEvt<T>, ISaveObjectReader, IVersionAware
+    public abstract class BaseDataReadEvt<T> : AsyncChainEvt<T>, IDataReader, IVersionAware
         where T : BaseDataReadEvt<T> {
 
         private readonly IVersionAware _versionAware;
 
         protected BaseDataReadEvt(CborObject data, IVersionAware versionAware) {
-            BackingObject = data;
+            Obj = data;
             _versionAware = versionAware;
         }
 
-        public CborObject BackingObject { get; }
+        public CborObject Obj { get; }
 
         public int Version {
             get => _versionAware.Version;
@@ -34,15 +34,15 @@ namespace Spookline.SPC.Save {
     }
 
     public abstract class BaseDataWriteEvt<T> : AsyncChainEvt<T>,
-        ISaveObjectWriter, ISaveObjectReader, IVersionAware
+        IDataWriter, IDataReader, IVersionAware
         where T : BaseDataWriteEvt<T> {
 
         private readonly IVersionAware _versionAware;
 
-        public CborObject BackingObject { get; }
+        public CborObject Obj { get; }
 
         protected BaseDataWriteEvt(CborObject data, IVersionAware versionAware) {
-            BackingObject = data;
+            Obj = data;
             _versionAware = versionAware;
         }
 
