@@ -84,7 +84,18 @@ namespace Spookline.SPC.Debugging {
             return new WorldOverlayBuilder(api.CurrentId, api);
         }
 
+        public WorldOverlayBuilder Continue(ulong id) {
+            if (api == null) return default;
+            return !api.ContinueEntry(id) ? default : new WorldOverlayBuilder(api.CurrentId, api);
+        }
+
+        public WorldOverlayBuilder Continue(string key) {
+            if (api == null) return default;
+            return !api.ContinueEntry(key) ? default : new WorldOverlayBuilder(api.CurrentId, api);
+        }
+
     }
+
 
     public interface IWorldOverlayAPI {
 
@@ -124,6 +135,7 @@ namespace Spookline.SPC.Debugging {
 
 
         void Tick();
+        void SetCamera(Camera cam);
 
     }
 
@@ -170,6 +182,7 @@ namespace Spookline.SPC.Debugging {
         ) { }
 
         public void Tick() { }
+        public void SetCamera(Camera cam) { }
 
     }
 }

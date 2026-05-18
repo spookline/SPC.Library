@@ -14,8 +14,6 @@ namespace Spookline.SPC.UI.Overlay {
 
     [SerializeField]
     private bool _sortDepth = true;
-    [SerializeField]
-    private Camera _camera;
 
     [Header("Scaling")]
     [SerializeField]
@@ -31,6 +29,7 @@ namespace Spookline.SPC.UI.Overlay {
     [SerializeField]
     private float _maxScale = 1.5f;
 
+    private Camera _camera;
     private readonly Dictionary<ulong, OverlayEntry> _entries = new();
     private readonly HashSet<string> _activeFieldsHelper = new();
     private VisualElement _root;
@@ -91,6 +90,10 @@ namespace Spookline.SPC.UI.Overlay {
       _entriesToRemove.Clear();
       _fieldsToRemove.Clear();
       _root.Clear();
+    }
+
+    public void SetCamera(Camera cam) {
+      _camera = cam;
     }
 
     public void Tick() {

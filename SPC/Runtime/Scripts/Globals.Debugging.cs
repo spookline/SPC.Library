@@ -157,7 +157,10 @@ namespace Spookline.SPC {
 
                     if (isDrawPass) PolyDrawRenderer.InstanceOrNull?.Tick();
                     if (isScreenOverlayPass) debugScreenOverlay.Tick();
-                    if (isWorldOverlayPass) debugWorldOverlay.Tick();
+                    if (isWorldOverlayPass) {
+                        debugWorldOverlay.SetCamera(cam);
+                        debugWorldOverlay.Tick();
+                    }
                 }
             }
 
