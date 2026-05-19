@@ -1,4 +1,7 @@
+using System;
+using System.Runtime.Serialization;
 using Dahomey.Cbor.ObjectModel;
+using JetBrains.Annotations;
 using Unity.Mathematics;
 using UnityEngine;
 
@@ -225,24 +228,48 @@ namespace Spookline.SPC.Save {
 
     }
 
-    public class InvalidCborException<T> : System.Exception {
+    public abstract class CborException : System.Exception {
+
+        protected CborException() { }
+        protected CborException(string message) : base(message) { }
+        protected CborException(string message, Exception innerException) : base(message, innerException) { }
+
+    }
+
+    public class InvalidCborException<T> : CborException {
 
         public CborValue offending;
 
         public InvalidCborException(CborValue offending) : base(
-            $"CborValue cannot be converted to {typeof(T).Name}."
+            $"CborValue of type '{offending?.Type}' cannot be converted to {typeof(T).Name}."
         ) {
+            this.offending = offending;
+        }
+
+        public InvalidCborException(CborValue offending, System.Exception inner) : base(
+            $"CborValue of type '{offending?.Type}' cannot be converted to {typeof(T).Name}.",
+            inner
+        ) {
+            this.offending = offending;
+        }
+
+        public InvalidCborException(CborValue offending, string message) : base(message) {
+            this.offending = offending;
+        }
+
+        public InvalidCborException(CborValue offending, string message, System.Exception inner) :
+            base(message, inner) {
             this.offending = offending;
         }
 
     }
 
-    public class MissingCborMemoryException : System.Exception {
+    public class MissingCborMemberException : CborException {
 
         public CborValue offending;
         public string member;
 
-        public MissingCborMemoryException(CborValue offending, string member) : base(
+        public MissingCborMemberException(CborValue offending, string member) : base(
             $"CborValue does not contain required member '{member}'."
         ) {
             this.offending = offending;

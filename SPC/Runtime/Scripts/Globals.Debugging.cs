@@ -200,7 +200,7 @@ namespace Spookline.SPC {
         public static DebugConfig Decode(CborObject cbor) {
             var reader = new DataReader(cbor);
             var flags = new HashSet<string>();
-            reader.MemberOptional("flags")?.Collection(flags, v => v.Value<string>());
+            reader.MemberOptional("flags")?.Collection(flags, v => v.Str());
 
             var config = new DebugConfig {
                 flags = flags

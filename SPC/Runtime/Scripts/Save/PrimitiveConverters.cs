@@ -1,3 +1,4 @@
+using System;
 using Dahomey.Cbor.ObjectModel;
 
 namespace Spookline.SPC.Save {
@@ -96,6 +97,8 @@ namespace Spookline.SPC.Save {
             throw new InvalidCborException<long>(value);
         }
 
+        public static bool IsNull(this CborValue value) => value is CborNull or null;
+
         public static bool TryGetArray(this CborValue value, out CborArray result) {
             if (value is CborArray array) {
                 result = array;
@@ -147,13 +150,52 @@ namespace Spookline.SPC.Save {
             return false;
         }
 
-        public static bool IsNull(this CborValue value) => value is CborNull or null;
+        public static void CborScopeAction<T>(this CborValue value, Action action) {
+            try {
+                action(); //
+            } catch (CborException) {
+                throw; // Rethrow
+            } catch (Exception exception) {
+                throw new InvalidCborException<T>(value, exception); // Convert
+            }
+        }
 
-        public static CborValue ToCbor(this string str) => CborValueConvert.ToValue(str);
-        public static CborValue ToCbor(this int i) => CborValueConvert.ToValue(i);
-        public static CborValue ToCbor(this float f) => CborValueConvert.ToValue(f);
-        public static CborValue ToCbor(this bool b) => CborValueConvert.ToValue(b);
-        public static CborValue ToCbor(this long l) => CborValueConvert.ToValue(l);
+
+        public static T CborScopeProducer<T>(this CborValue value, Func<T> func) {
+            try {
+                return func(); //
+            } catch (CborException) {
+                throw; // Rethrow
+            } catch (Exception exception) {
+                throw new InvalidCborException<T>(value, exception); // Convert
+            }
+        }
+
+        public static T CborScopeProducer<T>(this CborValue value, Func<CborValue, T> func) {
+            try {
+                return func(value); //
+            } catch (CborException) {
+                throw; // Rethrow
+            } catch (Exception exception) {
+                throw new InvalidCborException<T>(value, exception); // Convert
+            }
+        }
+
+        public static T CborScopeProducer<T, TArg>(this CborValue value, TArg arg, Func<TArg, T> func) {
+            try {
+                return func(arg); //
+            } catch (CborException) {
+                throw; // Rethrow
+            } catch (Exception exception) {
+                throw new InvalidCborException<T>(value, exception); // Convert
+            }
+        }
+
+        public static CborValue ToCbor(this string str) => str;
+        public static CborValue ToCbor(this int i) => i;
+        public static CborValue ToCbor(this float f) => f;
+        public static CborValue ToCbor(this bool b) => b;
+        public static CborValue ToCbor(this long l) => l;
 
     }
 }

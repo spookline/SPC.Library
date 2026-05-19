@@ -76,13 +76,13 @@ namespace Spookline.SPC.Save {
         public static CborValue Member(this IDataReader reader, string key) {
             if (reader.Obj.TryGetMember(key, out var value)) { return value; }
 
-            throw new MissingCborMemoryException(reader.Obj, key);
+            throw new MissingCborMemberException(reader.Obj, key);
         }
 
         public static CborValue MemberNullable(this IDataReader reader, string key) {
             if (reader.Obj.TryGetMember(key, out var value)) { return value is CborNull ? null : value; }
 
-            throw new MissingCborMemoryException(reader.Obj, key);
+            throw new MissingCborMemberException(reader.Obj, key);
         }
 
         public static CborValue MemberOptional(this IDataReader reader, string key) {

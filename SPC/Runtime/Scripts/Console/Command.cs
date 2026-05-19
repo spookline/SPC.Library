@@ -14,6 +14,57 @@ namespace Spookline.SPC.Console {
         public List<Argument> AllArguments { get; } = new();
         public List<Command> AllChildren { get; } = new();
 
+        public static Command Action(string name, Func<CommandContext, CommandResult> action, string description = "") {
+            return new ActionCommand(name, description, action);
+        }
+
+        public static Command Action(
+            string name,
+            Func<CommandContext, UniTask<CommandResult>> innerAction,
+            string description = ""
+        ) {
+            return new ActionCommand(name, description, innerAction);
+        }
+
+        public static Command SingleArgumentAction<T>(
+            string name,
+            Func<ArgumentPreset, Argument<T>> argBuilder,
+            Func<CommandContext, T, CommandResult> action,
+            string description = "",
+            string argDescription = "",
+            bool argRequired = true
+        ) {
+            var preset = argRequired ? Argument(name, argDescription) : Optional(name, argDescription);
+            var arg = argBuilder(preset);
+            var command = new ActionCommand(
+                name,
+                description,
+                context => action(context, arg[context])
+            );
+            command.Arguments(arg);
+            return command;
+        }
+
+        public static Command SingleArgumentAction<T>(
+            string name,
+            Func<ArgumentPreset, Argument<T>> argBuilder,
+            Func<CommandContext, T, UniTask<CommandResult>> action,
+            string description = "",
+            string argDescription = "",
+            bool argRequired = true
+        ) {
+            var preset = argRequired ? Argument(name, argDescription) : Optional(name, argDescription);
+            var arg = argBuilder(preset);
+            var command = new ActionCommand(
+                name,
+                description,
+                context => action(context, arg[context])
+            );
+            command.Arguments(arg);
+            return command;
+        }
+
+
         protected static ArgumentPreset Argument(string name, string description = "") {
             return new ArgumentPreset(
                 name,
@@ -176,6 +227,18 @@ namespace Spookline.SPC.Console {
             return new CommandResult { success = false, hasMessage = true, message = error };
         }
 
+        public static implicit operator CommandResult(bool success) {
+            return new CommandResult { success = success };
+        }
+
+        public static implicit operator bool(CommandResult result) {
+            return result.success;
+        }
+
+        public static implicit operator CommandResult(string message) {
+            return Successful(message);
+        }
+
     }
 
     public struct CompletionResult {
@@ -225,6 +288,56 @@ namespace Spookline.SPC.Console {
         public string error = "#FF0000";
         public string valid = "#00FF00";
         public string weak = "#808080";
+
+    }
+
+    public class ActionCommand : Command {
+
+        public override string Name { get; }
+        public override string Description { get; }
+
+        public Func<CommandContext, UniTask<CommandResult>> InnerAction { get; }
+
+        public ActionCommand(string name, string description, Action action) {
+            Name = name;
+            Description = description;
+            InnerAction = _ => {
+                action();
+                return UniTask.FromResult(CommandResult.Successful());
+            };
+        }
+
+        public ActionCommand(string name, string description, Func<CommandContext, CommandResult> action) {
+            Name = name;
+            Description = description;
+            InnerAction = context => UniTask.FromResult(action(context));
+        }
+
+        public ActionCommand(
+            string name,
+            string description,
+            Func<CommandContext, UniTask<CommandResult>> innerAction
+        ) {
+            Name = name;
+            Description = description;
+            InnerAction = innerAction;
+        }
+
+        public ActionCommand(string name, Action action) : this(name, "", action) { }
+
+        public ActionCommand(
+            string name,
+            Func<CommandContext, CommandResult> action
+        ) : this(name, "", action) { }
+
+        public ActionCommand(
+            string name,
+            Func<CommandContext, UniTask<CommandResult>> innerAction
+        ) : this(name, "", innerAction) { }
+
+        public override UniTask<CommandResult> ExecuteAsync(CommandContext context) {
+            return InnerAction(context);
+        }
 
     }
 }

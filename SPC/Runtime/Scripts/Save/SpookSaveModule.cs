@@ -234,7 +234,7 @@ namespace Spookline.SPC.Save {
 
             var playerData = new PlayerData();
             PlayerData.Read(obj, playerData);
-            Debug.Log($"Loaded player data from {path}");
+            Debug.Log($"Loaded player data from {path}: {JsonDumpPlayerData(playerData)}");
             return playerData;
         }
 

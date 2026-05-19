@@ -132,9 +132,8 @@ namespace Spookline.SPC.Events {
                         if (registration.IsDisposed) continue;
                         registration.Handler.Invoke(ref evt);
                     } catch (Exception e) {
-                        Debug.LogError(
-                            $"Error invoking event handler {registration.DebugName} for event {typeof(T).Name}: {e}"
-                        );
+                        Debug.LogError($"Error invoking event handler {registration.DebugName} for event {typeof(T).Name}");
+                        Debug.LogException(e);
                     }
                 }
 

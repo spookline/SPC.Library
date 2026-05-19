@@ -147,7 +147,8 @@ namespace Spookline.SPC.Events {
             foreach (var action in _chain) {
                 if (action == null) continue;
                 try { await action.Invoke(); } catch (Exception e) {
-                    Debug.LogError($"Error in async chain for event {typeof(TSelf).Name}: {e}");
+                    Debug.LogError($"Exception in async chain of event {GetType().Name}");
+                    Debug.LogException(e);
                 }
             }
 
