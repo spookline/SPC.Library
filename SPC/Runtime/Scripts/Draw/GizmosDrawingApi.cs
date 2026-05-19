@@ -25,14 +25,37 @@ namespace Spookline.SPC.Draw {
         public void Disc(Vector3 center, Vector3 normal, float radius, int segments = 16) {
             WireDisc(center, normal, radius, segments);
         }
+
         public void WireDisc(Vector3 center, Vector3 normal, float radius, int segments = 16) {
             DrawingApiDefaults<GizmosDrawingApi>.WireDisc(this, center, normal, radius, segments);
         }
+
         public void Arc(Vector3 center, Vector3 normal, Vector3 from, float radius, float angle, int segments = 16) {
             WireArc(center, normal, from, radius, angle, segments);
         }
-        public void WireArc(Vector3 center, Vector3 normal, Vector3 from, float radius, float angle, int segments = 16) {
+
+        public void WireArc(
+            Vector3 center,
+            Vector3 normal,
+            Vector3 from,
+            float radius,
+            float angle,
+            int segments = 16
+        ) {
             DrawingApiDefaults<GizmosDrawingApi>.WireArc(this, center, normal, from, radius, angle, segments);
+        }
+
+        public void Mesh(Mesh mesh) {
+#if UNITY_EDITOR
+            Gizmos.DrawMesh(mesh);
+#endif
+            DrawingApiDefaults<GizmosDrawingApi>.Mesh(this, mesh);
+        }
+
+        public void WireMesh(Mesh mesh) {
+#if UNITY_EDITOR
+            Gizmos.DrawWireMesh(mesh);
+#endif
         }
 
         public void Quad(Vector3 a, Vector3 b, Vector3 c, Vector3 d) {
@@ -94,5 +117,10 @@ namespace Spookline.SPC.Draw {
         public void Triangle(Vector3 a, Vector3 b, Vector3 c) {
             DrawingApiDefaults<GizmosDrawingApi>.Triangle(this, a, b, c);
         }
+
+        public void Triangles(ReadOnlySpan<Vector3> points) {
+            DrawingApiDefaults<GizmosDrawingApi>.Triangles(this, points);
+        }
+
     }
 }

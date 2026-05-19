@@ -33,6 +33,10 @@ namespace Spookline.SPC.Draw {
             _triangles.Add(Matrix.MultiplyPoint3x4(c));
         }
 
+        public void Triangles(ReadOnlySpan<Vector3> points) {
+            DrawingApiDefaults<BufferedGlDrawingApi>.Triangles(this, points);
+        }
+
         public void Quad(Vector3 a, Vector3 b, Vector3 c, Vector3 d) {
             Triangle(a, b, c);
             Triangle(a, c, d);
@@ -82,6 +86,14 @@ namespace Spookline.SPC.Draw {
             int segments = 16
         ) =>
             DrawingApiDefaults<BufferedGlDrawingApi>.WireArc(this, center, normal, from, radius, angle, segments);
+
+        public void WireMesh(Mesh mesh) {
+            DrawingApiDefaults<BufferedGlDrawingApi>.WireMesh(this, mesh);
+        }
+
+        public void Mesh(Mesh mesh) {
+            DrawingApiDefaults<BufferedGlDrawingApi>.Mesh(this, mesh);
+        }
 
         public void Cube(Vector3 center, Vector3 size) {
             DrawingApiDefaults<BufferedGlDrawingApi>.Cube(this, center, size);

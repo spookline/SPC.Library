@@ -33,6 +33,11 @@ namespace Spookline.SPC.Draw {
             Handles.DrawAAConvexPolygon(a, b, c);
 #endif
         }
+
+        public void Triangles(ReadOnlySpan<Vector3> points) {
+            DrawingApiDefaults<HandlesDrawingApi>.Triangles(this, points);
+        }
+
         public void Quad(Vector3 a, Vector3 b, Vector3 c, Vector3 d) {
 #if UNITY_EDITOR
             Handles.DrawAAConvexPolygon(a, b, c, d);
@@ -115,6 +120,13 @@ namespace Spookline.SPC.Draw {
 #if UNITY_EDITOR
             Handles.DrawWireArc(center, normal, from, angle, radius);
 #endif
+        }
+
+        public void Mesh(Mesh mesh) {
+            DrawingApiDefaults<HandlesDrawingApi>.Mesh(this, mesh);
+        }
+        public void WireMesh(Mesh mesh) {
+            DrawingApiDefaults<HandlesDrawingApi>.WireMesh(this, mesh);
         }
 
 #if UNITY_EDITOR

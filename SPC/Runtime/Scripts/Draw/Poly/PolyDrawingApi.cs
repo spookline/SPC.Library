@@ -122,7 +122,13 @@ namespace Spookline.SPC.Draw {
         public void Triangle(Vector3 a, Vector3 b, Vector3 c) {
             PolyDrawRenderer.Instance.AddCommand(
                 isIdentity
-                    ? PolyDrawCommandFactory.Triangle(a, b, c, PolyDrawCommandFactory.Color(Color), PolyDrawCommandFlags.Wire)
+                    ? PolyDrawCommandFactory.Triangle(
+                        a,
+                        b,
+                        c,
+                        PolyDrawCommandFactory.Color(Color),
+                        PolyDrawCommandFlags.Wire
+                    )
                     : PolyDrawCommandFactory.Triangle(
                         Matrix,
                         a,
@@ -134,10 +140,24 @@ namespace Spookline.SPC.Draw {
             );
         }
 
+        public void Triangles(ReadOnlySpan<Vector3> points) {
+            for (var i = 0; i < points.Length; i += 3) {
+                if (i + 2 >= points.Length) break;
+                Triangle(points[i], points[i + 1], points[i + 2]);
+            }
+        }
+
         public void Quad(Vector3 a, Vector3 b, Vector3 c, Vector3 d) {
             PolyDrawRenderer.Instance.AddCommand(
                 isIdentity
-                    ? PolyDrawCommandFactory.Quad(a, b, c, d, PolyDrawCommandFactory.Color(Color), PolyDrawCommandFlags.Wire)
+                    ? PolyDrawCommandFactory.Quad(
+                        a,
+                        b,
+                        c,
+                        d,
+                        PolyDrawCommandFactory.Color(Color),
+                        PolyDrawCommandFlags.Wire
+                    )
                     : PolyDrawCommandFactory.Quad(
                         Matrix,
                         a,
@@ -275,6 +295,14 @@ namespace Spookline.SPC.Draw {
                     Duration
                 );
             }
+        }
+
+        public void Mesh(Mesh mesh) {
+            DrawingApiDefaults<PolyDrawingApi>.Mesh(this, mesh);
+        }
+
+        public void WireMesh(Mesh mesh) {
+            DrawingApiDefaults<PolyDrawingApi>.WireMesh(this, mesh);
         }
 
         private Matrix4x4 _matrix;

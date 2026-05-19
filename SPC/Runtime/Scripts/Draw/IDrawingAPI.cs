@@ -14,6 +14,7 @@ namespace Spookline.SPC.Draw {
 
 
         void Triangle(Vector3 a, Vector3 b, Vector3 c);
+        void Triangles(ReadOnlySpan<Vector3> points);
 
         void Quad(Vector3 a, Vector3 b, Vector3 c, Vector3 d);
 
@@ -30,6 +31,9 @@ namespace Spookline.SPC.Draw {
 
         void WireArc(Vector3 center, Vector3 normal, Vector3 from, float radius, float angle, int segments = 16);
 
+        void Mesh(Mesh mesh);
+        void WireMesh(Mesh mesh);
+
         Matrix4x4 Matrix { get; set; }
         Color Color { get; set; }
 
@@ -43,6 +47,12 @@ namespace Spookline.SPC.Draw {
             points[1] = b;
             points[2] = c;
             api.Strip(points, true);
+        }
+
+        public static void Triangles(T api, ReadOnlySpan<Vector3> points) {
+            for (var i = 0; i + 2 < points.Length; i += 3) {
+                Triangle(api, points[i], points[i + 1], points[i + 2]);
+            }
         }
 
         public static void Quad(T api, Vector3 a, Vector3 b, Vector3 c, Vector3 d) {
@@ -319,7 +329,6 @@ namespace Spookline.SPC.Draw {
 
                 api.Triangle(center, a, b);
             }
-
         }
 
         public static void Cone(T api, Vector3 origin, Vector3 direction, float length, float angle, int segments = 8) {
@@ -402,6 +411,73 @@ namespace Spookline.SPC.Draw {
             }
         }
 
+        public static void Mesh(T api, Mesh mesh) {
+            var indices = mesh.triangles;
+            var vertices = mesh.vertices;
+
+            var lineCount = indices.Length;
+            if (lineCount > 128) {
+                var array = ArrayPool<Vector3>.Shared.Rent(lineCount);
+                try { Render(array.AsSpan(0, lineCount)); } finally { ArrayPool<Vector3>.Shared.Return(array); }
+            } else {
+                Span<Vector3> span = stackalloc Vector3[lineCount];
+                Render(span);
+            }
+
+            return;
+
+            void Render(Span<Vector3> triangles) {
+                var triangleIndex = 0;
+                for (var i = 0; i < triangles.Length; i += 3) {
+                    var a = vertices[indices[i]];
+                    var b = vertices[indices[i + 1]];
+                    var c = vertices[indices[i + 2]];
+
+                    triangles[triangleIndex++] = a;
+                    triangles[triangleIndex++] = b;
+                    triangles[triangleIndex++] = c;
+                }
+
+                api.Triangles(triangles);
+            }
+        }
+
+        public static void WireMesh(T api, Mesh mesh) {
+            var indices = mesh.triangles;
+            var vertices = mesh.vertices;
+
+            var lineCount = indices.Length * 2;
+            if (lineCount > 128) {
+                var array = ArrayPool<Vector3>.Shared.Rent(lineCount);
+                try { Render(array.AsSpan(0, lineCount)); } finally { ArrayPool<Vector3>.Shared.Return(array); }
+            } else {
+                Span<Vector3> span = stackalloc Vector3[lineCount];
+                Render(span);
+            }
+
+            return;
+
+            void Render(Span<Vector3> lines) {
+                var lineIndex = 0;
+                for (var i = 0; i < indices.Length; i += 3) {
+                    var a = vertices[indices[i]];
+                    var b = vertices[indices[i + 1]];
+                    var c = vertices[indices[i + 2]];
+
+                    lines[lineIndex++] = a;
+                    lines[lineIndex++] = b;
+
+                    lines[lineIndex++] = b;
+                    lines[lineIndex++] = c;
+
+                    lines[lineIndex++] = c;
+                    lines[lineIndex++] = a;
+                }
+
+                api.Lines(lines);
+            }
+        }
+
         public static Vector3 GetFallbackAxis(Vector3 n) {
             var reference = math.abs(Vector3.Dot(n, Vector3.right)) > 0.999f
                 ? Vector3.forward
@@ -419,5 +495,6 @@ namespace Spookline.SPC.Draw {
                 cosLat * math.sin(lon)
             ) * radius;
         }
+
     }
 }

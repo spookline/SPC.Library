@@ -13,9 +13,7 @@ namespace Spookline.SPC.Draw {
                 if (_material) return _material;
 
                 _material = Resources.Load<Material>("PolyDrawGLURP");
-                if (_material) {
-                    return _material;
-                }
+                if (_material) { return _material; }
 
                 var shader = Shader.Find("Hidden/Internal-Colored");
                 _material = new Material(shader) {
@@ -99,6 +97,20 @@ namespace Spookline.SPC.Draw {
             GL.Vertex(a);
             GL.Vertex(b);
             GL.Vertex(c);
+            End();
+        }
+
+        public void Triangles(ReadOnlySpan<Vector3> points) {
+            if (points.Length < 3) return;
+
+            Begin(GL.TRIANGLES);
+
+            for (var i = 0; i + 2 < points.Length; i += 3) {
+                GL.Vertex(points[i]);
+                GL.Vertex(points[i + 1]);
+                GL.Vertex(points[i + 2]);
+            }
+
             End();
         }
 
@@ -291,6 +303,14 @@ namespace Spookline.SPC.Draw {
             int segments = 16
         ) {
             DrawingApiDefaults<ImmediateGlDrawingApi>.WireArc(this, center, normal, from, radius, angle, segments);
+        }
+
+        public void Mesh(Mesh mesh) {
+            DrawingApiDefaults<ImmediateGlDrawingApi>.Mesh(this, mesh);
+        }
+
+        public void WireMesh(Mesh mesh) {
+            DrawingApiDefaults<ImmediateGlDrawingApi>.WireMesh(this, mesh);
         }
 
         public void Dispose() { }

@@ -209,8 +209,4 @@ namespace Spookline.SPC.Cleaver {
         All = byte.MaxValue
 
     }
-
-    public class NavmeshAgentTypeAttribute : PropertyAttribute { }
-
-    public class NavmeshAreaAttribute : PropertyAttribute { }
 }
