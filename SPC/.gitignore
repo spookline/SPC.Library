@@ -1,0 +1,6 @@
+Packages/*/buildTransitive*
+Packages/**/*.xml*
+Packages/**/*.png*
+Packages/**/.signature*
+Packages/**/*.nuspec*
+Packages/**/useSharedDesignerContext.txt*
