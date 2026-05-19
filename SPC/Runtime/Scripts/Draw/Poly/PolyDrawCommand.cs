@@ -1,6 +1,8 @@
 using System;
 using System.Runtime.InteropServices;
+using Unity.Collections;
 using Unity.Mathematics;
+using UnityEngine;
 
 namespace Spookline.SPC.Draw {
     [StructLayout(LayoutKind.Sequential)]
@@ -92,6 +94,62 @@ namespace Spookline.SPC.Draw {
             this.normal = normal;
             this.color = color;
             this.primitiveFlags = primitiveFlags;
+        }
+
+    }
+
+    public struct PolyDrawMeshBuffer {
+
+        public PolyDrawVertex[] vertices;
+        public int[] indices;
+        public AffineTransform transform;
+
+
+        public static PolyDrawMeshBuffer FromMesh(Mesh mesh, Color color, bool doubleSided = false) {
+            var vertices = mesh.vertices;
+            var indices = mesh.triangles;
+            var normals = mesh.normals;
+
+            var buffer = new PolyDrawMeshBuffer {
+                vertices = new PolyDrawVertex[vertices.Length],
+                indices = indices
+            };
+
+            for (var i = 0; i < vertices.Length; i++) {
+                var v = new PolyDrawVertex {
+                    position = vertices[i],
+                    normal = normals[i],
+                    color = PolyDrawCommandFactory.Color(color),
+                    primitiveFlags = doubleSided ? PolyDrawShaderFlags.DoubleSided : 0f
+                };
+                buffer.vertices[i] = v;
+            }
+
+            return buffer;
+        }
+
+        public static PolyDrawMeshBuffer FromMeshVertexColors(Mesh mesh, bool doubleSided = false) {
+            var vertices = mesh.vertices;
+            var indices = mesh.triangles;
+            var normals = mesh.normals;
+            var colors = mesh.colors;
+
+            var buffer = new PolyDrawMeshBuffer {
+                vertices = new PolyDrawVertex[vertices.Length],
+                indices = indices
+            };
+
+            for (var i = 0; i < vertices.Length; i++) {
+                var v = new PolyDrawVertex {
+                    position = vertices[i],
+                    normal = normals[i],
+                    color = PolyDrawCommandFactory.Color(colors[i]),
+                    primitiveFlags = doubleSided ? PolyDrawShaderFlags.DoubleSided : 0f
+                };
+                buffer.vertices[i] = v;
+            }
+
+            return buffer;
         }
 
     }

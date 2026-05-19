@@ -298,7 +298,13 @@ namespace Spookline.SPC.Draw {
         }
 
         public void Mesh(Mesh mesh) {
-            DrawingApiDefaults<PolyDrawingApi>.Mesh(this, mesh);
+            PolyDrawRenderer.Instance.AddMesh(
+                mesh,
+                Color,
+                Duration,
+                _matrix,
+                !isIdentity
+            );
         }
 
         public void WireMesh(Mesh mesh) {

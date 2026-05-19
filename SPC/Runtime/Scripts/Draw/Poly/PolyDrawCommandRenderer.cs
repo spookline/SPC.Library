@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using Unity.Burst;
 using Unity.Collections;
@@ -27,6 +28,7 @@ namespace Spookline.SPC.Draw {
 
         private NativeList<PolyDrawCommand> _commands;
         private NativeList<PolyDrawVertex> _directLineVertices;
+        private List<PolyDrawMeshBuffer> _meshBuffers;
 
         private Mesh _mesh;
         private MeshFilter _meshFilter;
@@ -86,6 +88,7 @@ namespace Spookline.SPC.Draw {
 
         public void RebuildCommandsAndMesh() {
             EnsureCreated();
+            _meshBuffers.Clear();
             _commands.Clear();
             _directLineVertices.Clear();
 
@@ -97,7 +100,8 @@ namespace Spookline.SPC.Draw {
 
             var primitiveWriter = new PolyDrawCommandWriter(_commands);
             var lineWriter = new PolyDrawLineWriter(_directLineVertices);
-            BuildCommands(ref primitiveWriter, ref lineWriter, offscreenFrame);
+            var meshBuffers = new PolyDrawMeshBufferWriter(_meshBuffers);
+            BuildCommands(ref primitiveWriter, ref lineWriter, ref meshBuffers, offscreenFrame);
 
             if (offscreenFrame) return;
 
@@ -108,6 +112,7 @@ namespace Spookline.SPC.Draw {
         protected abstract void BuildCommands(
             ref PolyDrawCommandWriter writer,
             ref PolyDrawLineWriter lines,
+            ref PolyDrawMeshBufferWriter meshBuffers,
             bool isOffscreenFrame
         );
 
@@ -178,9 +183,17 @@ namespace Spookline.SPC.Draw {
                     wireVertexCount = wireVertexCountRef.Value;
                 }
 
+                var meshBufferVertexCount = 0;
+                var meshBufferIndexCount = 0;
+                for (var i = 0; i < _meshBuffers.Count; i++) {
+                    var buffer = _meshBuffers[i];
+                    meshBufferVertexCount += buffer.vertices.Length;
+                    meshBufferIndexCount += buffer.indices.Length;
+                }
+
                 var totalLineVertexCount = wireVertexCount + lineVertexCount;
-                var totalVertexCount = meshVertexCount + totalLineVertexCount;
-                var totalIndexCount = meshIndexCount + totalLineVertexCount;
+                var totalVertexCount = meshVertexCount + totalLineVertexCount + meshBufferVertexCount;
+                var totalIndexCount = meshIndexCount + totalLineVertexCount + meshBufferIndexCount;
 
                 if (totalVertexCount == 0 || totalIndexCount == 0) {
                     _mesh.Clear();
@@ -211,9 +224,37 @@ namespace Spookline.SPC.Draw {
                         }.Schedule(commandCount, 32).Complete();
                     }
 
+                    if (meshBufferVertexCount > 0 && meshBufferIndexCount > 0) {
+                        var vertexIndex = meshVertexCount;
+                        var indexIndex = meshIndexCount;
+                        for (var i = 0; i < _meshBuffers.Count; i++) {
+                            var buffer = _meshBuffers[i];
+
+                            var indexSlice = indices.Slice(indexIndex, buffer.indices.Length);
+                            indexSlice.CopyFrom(buffer.indices);
+                            BurstCompiled.IncrementIndicesMonotonically(indexSlice, vertexIndex);
+                            // for (var j = 0; j < buffer.indices.Length; j++) {
+                            //     indices[indexIndex + j] = buffer.indices[j] + vertexIndex;
+                            // }
+
+                            var slice = vertices.Slice(vertexIndex, buffer.vertices.Length);
+                            slice.CopyFrom(buffer.vertices);
+                            BurstCompiled.TransformVertices(slice, buffer.transform);
+                            // for (var j = 0; j < buffer.vertices.Length; j++) {
+                            //     var vertex = buffer.vertices[j];
+                            //     vertex.position = math.transform(buffer.transform, vertex.position);
+                            //     vertex.normal = math.rotate(buffer.transform, vertex.normal);
+                            //     vertices[vertexIndex + j] = vertex;
+                            // }
+
+                            vertexIndex += buffer.vertices.Length;
+                            indexIndex += buffer.indices.Length;
+                        }
+                    }
+
                     if (wireVertexCount > 0) {
                         var wireVertices = vertices.GetSubArray(
-                            meshVertexCount,
+                            meshVertexCount + meshBufferVertexCount,
                             wireVertexCount
                         );
 
@@ -231,18 +272,18 @@ namespace Spookline.SPC.Draw {
                         vertices = vertices,
                         indices = indices,
 
-                        indexBase = meshIndexCount,
-                        vertexBase = meshVertexCount,
+                        indexBase = meshIndexCount + meshBufferIndexCount,
+                        vertexBase = meshVertexCount + meshBufferVertexCount,
 
                         totalLineVertexCount = totalLineVertexCount,
-                        directLineDestinationOffset = meshVertexCount + wireVertexCount
+                        directLineDestinationOffset = meshVertexCount + wireVertexCount + meshBufferVertexCount
                     }.Run();
 
                     UploadMesh(
                         vertices,
                         indices,
-                        meshVertexCount,
-                        meshIndexCount,
+                        meshVertexCount + meshBufferVertexCount,
+                        meshIndexCount + meshBufferIndexCount,
                         totalLineVertexCount,
                         totalVertexCount,
                         totalIndexCount
@@ -327,6 +368,8 @@ namespace Spookline.SPC.Draw {
         }
 
         private void EnsureCreated() {
+            if (_meshBuffers == null) _meshBuffers = new List<PolyDrawMeshBuffer>();
+
             if (!_commands.IsCreated)
                 _commands = new NativeList<PolyDrawCommand>(64, CommandAllocator);
             if (!_directLineVertices.IsCreated)
@@ -472,6 +515,35 @@ namespace Spookline.SPC.Draw {
 
                 for (var i = 0; i < source.Length; i++)
                     vertices[directLineDestinationOffset + i] = source[i];
+            }
+
+        }
+
+        [BurstCompile]
+        private static class BurstCompiled {
+
+            [BurstCompile]
+            public static void TransformVertices(
+                in NativeSlice<PolyDrawVertex> vertices,
+                in AffineTransform transform
+            ) {
+                var arr = vertices;
+                for (var i = 0; i < arr.Length; i++) {
+                    var v = arr[i];
+                    v.position = math.transform(transform, v.position);
+                    v.normal = math.rotate(transform, v.normal);
+
+                    arr[i] = v;
+                }
+            }
+
+            [BurstCompile]
+            public static void IncrementIndicesMonotonically(
+                in NativeSlice<int> indices,
+                int indexBase
+            ) {
+                var arr = indices;
+                for (var i = 0; i < arr.Length; i++) arr[i] = indexBase + arr[i];
             }
 
         }
