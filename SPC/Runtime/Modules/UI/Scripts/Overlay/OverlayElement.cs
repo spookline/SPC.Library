@@ -1,18 +1,14 @@
 using System.Collections.Generic;
+using System.Reflection;
 using HELIX.Coloring;
 using HELIX.Extensions;
 using HELIX.Types;
+using Spookline.SPC.Debugging;
 using UnityEngine;
 using UnityEngine.UIElements;
 
 namespace Spookline.SPC.UI.Overlay {
 
-  public interface IFieldElement {
-
-    VisualElement Root { get; }
-    void SetVisible(bool visible);
-
-  }
   public class OverlayElement : VisualElement {
 
     public Label titleLabel;
@@ -61,9 +57,10 @@ namespace Spookline.SPC.UI.Overlay {
     public IFieldElement GetOrCreateElement(string label, OverlayField field) {
       if (_fieldElements.TryGetValue(label, out var element)) {
         // Check if existing element matches field type
-        var isCompatible = (field is OverlayField.String or OverlayField.Float or OverlayField.Int &&
-                            element is OverlayFieldElement.Single) ||
-                           (field is OverlayField.Vec3 && element is OverlayFieldElement.Vec3);
+        var isCompatible = (field is OverlayField.Single && element is OverlayFieldElement.Single) ||
+                           (field is OverlayField.Vec3 && element is OverlayFieldElement.Vec3) ||
+                           (field is OverlayField.Custom custom && custom.CompatibleWith(element))
+                           ;
 
         if (isCompatible) return element;
 
@@ -73,6 +70,8 @@ namespace Spookline.SPC.UI.Overlay {
 
       IFieldElement newElement = field switch {
         OverlayField.Vec3 => new OverlayFieldElement.Vec3(label, field.unit),
+        OverlayField.Single => new OverlayFieldElement.Single(label, field.unit),
+        OverlayField.Custom custom => custom.CreateElement(label),
         _ => new OverlayFieldElement.Single(label, field.unit)
       };
 

@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.UIElements;
 
 namespace Spookline.SPC.Debugging {
     public readonly struct ScreenOverlayBuilder {
@@ -43,6 +44,16 @@ namespace Spookline.SPC.Debugging {
         ) {
             if (api == null) return this;
             api.UpdateField(label, value, decimals, unit, color);
+            return this;
+        }
+
+        public ScreenOverlayBuilder Field<T, E>(
+            string label,
+            T value,
+            IOverlayFieldFactory<T, E> factory
+        ) where E : IFieldElement {
+            if (api == null) return this;
+            api.UpdateField(label, value, factory);
             return this;
         }
 
@@ -96,6 +107,12 @@ namespace Spookline.SPC.Debugging {
             Color? color = null
         );
 
+        void UpdateField<T, E>(
+            string label,
+            T value,
+            IOverlayFieldFactory<T, E> factory
+        ) where E : IFieldElement;
+
         void Tick();
 
     }
@@ -125,6 +142,12 @@ namespace Spookline.SPC.Debugging {
             string unit = null,
             Color? color = null
         ) { }
+
+        public void UpdateField<T, E>(
+            string label,
+            T value,
+            IOverlayFieldFactory<T, E> factory
+        ) where E: IFieldElement{ }
 
         public void Tick() { }
 

@@ -1,5 +1,7 @@
 using Spookline.SPC.Common;
+using Spookline.SPC.Debugging;
 using UnityEngine;
+using UnityEngine.UIElements;
 
 namespace Spookline.SPC.UI.Overlay {
   public abstract class OverlayField {
@@ -12,7 +14,11 @@ namespace Spookline.SPC.UI.Overlay {
     public abstract void Render(IFieldElement element);
 
 
-    public class String : OverlayField {
+    public abstract class Single : OverlayField {
+
+    }
+
+    public class String : Single {
 
       public string value;
 
@@ -22,13 +28,13 @@ namespace Spookline.SPC.UI.Overlay {
         return true;
       }
 
-      public override void Render(IFieldElement element) {
+      public override void Render(Debugging.IFieldElement element) {
         if (element is OverlayFieldElement.Single single) { single.Update(label, value, unit, color); }
       }
 
     }
 
-    public class Float : OverlayField {
+    public class Float : Single {
 
       public float value;
       public int decimals;
@@ -42,13 +48,13 @@ namespace Spookline.SPC.UI.Overlay {
         return true;
       }
 
-      public override void Render(IFieldElement element) {
+      public override void Render(Debugging.IFieldElement element) {
         if (element is OverlayFieldElement.Single single) { single.Update(label, _cachedString, unit, color); }
       }
 
     }
 
-    public class Int : OverlayField {
+    public class Int : Single {
 
       public int value;
       private string _cachedString;
@@ -60,7 +66,7 @@ namespace Spookline.SPC.UI.Overlay {
         return true;
       }
 
-      public override void Render(IFieldElement element) {
+      public override void Render(Debugging.IFieldElement element) {
         if (element is OverlayFieldElement.Single single) { single.Update(label, _cachedString, unit, color); }
       }
 
@@ -82,8 +88,42 @@ namespace Spookline.SPC.UI.Overlay {
         return true;
       }
 
-      public override void Render(IFieldElement element) {
+      public override void Render(Debugging.IFieldElement element) {
         if (element is OverlayFieldElement.Vec3 vector) { vector.Update(label, _cachedStrings, unit, color); }
+      }
+
+    }
+
+    public abstract class Custom : OverlayField {
+      public abstract bool CompatibleWith(IFieldElement element);
+      public abstract IFieldElement CreateElement(string labelText);
+
+    }
+
+    public class Custom<T, E> : Custom  where E : IFieldElement {
+
+      private readonly IOverlayFieldFactory<T, E> _factory;
+      public T value;
+
+      public Custom(IOverlayFieldFactory<T, E> factory) {
+        _factory = factory;
+      }
+
+      public void Update(T val) {
+        value = val;
+      }
+
+      public override void Render(IFieldElement element) {
+        if (element is not E typeElement) return;
+        _factory.UpdateElement(typeElement, value);
+      }
+
+      public override bool CompatibleWith(IFieldElement element) {
+        return element is E;
+      }
+
+      public override IFieldElement CreateElement(string labelText) {
+        return _factory.CreateElement(labelText);
       }
 
     }

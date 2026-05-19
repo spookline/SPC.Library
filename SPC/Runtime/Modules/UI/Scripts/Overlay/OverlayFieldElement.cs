@@ -1,6 +1,7 @@
 using HELIX.Coloring;
 using HELIX.Coloring.Material;
 using HELIX.Extensions;
+using Spookline.SPC.Debugging;
 using UnityEngine;
 using UnityEngine.UIElements;
 

@@ -1,4 +1,3 @@
-using System;
 using System.Collections.Generic;
 using HELIX.Widgets;
 using Spookline.SPC.Common;
@@ -278,6 +277,20 @@ namespace Spookline.SPC.UI.Overlay {
       vectorField.unit = unit;
       vectorField.color = color;
       vectorField.lastSeenTime = Time.time;
+    }
+
+    public void UpdateField<T, E>(
+        string label,
+        T value,
+        IOverlayFieldFactory<T, E> factory) where E : IFieldElement {
+      var section = GetCurrentSection();
+      if (!section.fields.TryGetValue(label, out var field) || field is not OverlayField.Custom<T,E> customField) {
+        customField = new OverlayField.Custom<T,E>(factory) { label = label };
+        section.fields[label] = customField;
+      }
+
+      customField.Update(value);
+      customField.lastSeenTime = Time.time;
     }
   }
 }
