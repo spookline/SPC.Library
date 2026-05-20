@@ -70,15 +70,20 @@ namespace Spookline.SPC.Cleaver.Editor {
 
         private void DrawPointHandles(CleaverSection section, AffineTransform transform, EditablePoint point) {
             EditorGUI.BeginChangeCheck();
-
-            var draw = Drawing.Handles;
-            point.DrawHandles(transform, draw);
+            try {
+                EditablePoint.CurrentSection = section;
+                Undo.RecordObject(section, "Edit Cleaver Point");
+                point.DrawHandles(transform);
+                Undo.FlushUndoRecordObjects();
+            } finally {
+                EditablePoint.CurrentSection = null;
+            }
 
             if (EditorGUI.EndChangeCheck()) {
-                Undo.RecordObject(section, "Edit Cleaver Point");
                 EditorUtility.SetDirty(section);
                 EditorSceneManager.MarkSceneDirty(section.gameObject.scene);
             }
+
         }
 
     }

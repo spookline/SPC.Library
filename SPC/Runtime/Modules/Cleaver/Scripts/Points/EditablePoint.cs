@@ -16,6 +16,8 @@ namespace Spookline.SPC.Cleaver.Points {
     [Serializable]
     public abstract class EditablePoint {
 
+        public static CleaverSection CurrentSection;
+
         [OdinSerialize]
         public Vector3 position;
 
@@ -26,7 +28,7 @@ namespace Spookline.SPC.Cleaver.Points {
 
         public abstract void DrawEditor(AffineTransform transform, IDrawingAPI draw);
 
-        public abstract void DrawHandles(AffineTransform transform, HandlesDrawingApi draw);
+        public abstract void DrawHandles(AffineTransform transform);
         public abstract CleaverPoint Materialize(AffineTransform transform);
 
     }
@@ -70,7 +72,7 @@ namespace Spookline.SPC.Cleaver.Points {
 
     public static class DefaultHandleDrawers {
 
-        public static void Position(AffineTransform transform, HandlesDrawingApi draw, EditablePoint point) {
+        public static void Position(AffineTransform transform, EditablePoint point) {
 #if UNITY_EDITOR
             using (new Handles.DrawingScope((float4x4)transform)) {
                 var next = Handles.PositionHandle(point.position, Quaternion.identity);
@@ -79,7 +81,44 @@ namespace Spookline.SPC.Cleaver.Points {
 #endif
         }
 
-        public static void Rotation<T>(AffineTransform transform, HandlesDrawingApi draw, T point)
+        public static void Transform<T>(AffineTransform transform, T point)
+            where T : EditablePoint, IRotatablePoint {
+#if UNITY_EDITOR
+            using (new Handles.DrawingScope((float4x4)transform)) {
+                var p = point.position;
+                var r = point.Rotation;
+                Handles.TransformHandle(ref p, ref r);
+                point.position = p;
+                point.Rotation = r;
+            }
+#endif
+        }
+
+        public static void TransformScale<T>(AffineTransform transform, T point)
+            where T : EditablePoint, IRotatablePoint, IScalablePoint {
+#if UNITY_EDITOR
+            using (new Handles.DrawingScope((float4x4)transform)) {
+                var p = point.position;
+                var r = point.Rotation;
+                var s = point.Scale;
+                Handles.TransformHandle(ref p, ref r, ref s);
+                point.position = p;
+                point.Rotation = r;
+                point.Scale = s;
+            }
+#endif
+        }
+
+        public static void Position(AffineTransform transform, EditablePoint point, Quaternion rotation) {
+#if UNITY_EDITOR
+            using (new Handles.DrawingScope((float4x4)transform)) {
+                var next = Handles.PositionHandle(point.position, rotation);
+                point.position = next;
+            }
+#endif
+        }
+
+        public static void Rotation<T>(AffineTransform transform, T point)
             where T : EditablePoint, IRotatablePoint {
 #if UNITY_EDITOR
             using (new Handles.DrawingScope((float4x4)transform)) {
@@ -89,7 +128,7 @@ namespace Spookline.SPC.Cleaver.Points {
 #endif
         }
 
-        public static void Scale<T>(AffineTransform transform, HandlesDrawingApi draw, T point)
+        public static void Scale<T>(AffineTransform transform, T point)
             where T : EditablePoint, IScalablePoint {
 #if UNITY_EDITOR
             using (new Handles.DrawingScope((float4x4)transform)) {
@@ -99,12 +138,22 @@ namespace Spookline.SPC.Cleaver.Points {
 #endif
         }
 
-        public static void BoundingBox<T>(AffineTransform transform, HandlesDrawingApi draw, T point)
+        public static void Scale<T>(AffineTransform transform, T point, Quaternion rotation)
+            where T : EditablePoint, IScalablePoint {
+#if UNITY_EDITOR
+            using (new Handles.DrawingScope((float4x4)transform)) {
+                var next = Handles.ScaleHandle(point.Scale, point.position, rotation, 1f);
+                point.Scale = next;
+            }
+#endif
+        }
+
+        public static void BoundingBox<T>(AffineTransform transform, T point)
             where T : EditablePoint, IBoundingPoint, IRotatablePoint {
 #if UNITY_EDITOR
             const string handleKey = "boundsHandle";
 
-            if (point.editorData == null) point.editorData = new Dictionary<string, object>();
+            point.editorData ??= new Dictionary<string, object>();
 
             if (!point.editorData.TryGetValue(handleKey, out var handleObj) ||
                 handleObj is not BoxBoundsHandle boundsHandle) {
@@ -128,7 +177,6 @@ namespace Spookline.SPC.Cleaver.Points {
                 if (EditorGUI.EndChangeCheck()) {
                     point.Extents = boundsHandle.size;
                     var newWorldPos = drawingMatrix.MultiplyPoint3x4(boundsHandle.center);
-                    //point.position = Matrix4x4.Inverse(transformMatrix) * newWorldPos;
                     point.position = math.transform(math.inverse(transform), newWorldPos);
                 }
             }
@@ -158,10 +206,10 @@ namespace Spookline.SPC.Cleaver.Points {
     public class EditableOrientedBoxPoint : EditablePoint, IRotatablePoint, IBoundingPoint {
 
         [OdinSerialize]
-        private Quaternion _rotation;
+        private Quaternion _rotation = Quaternion.identity;
 
         [OdinSerialize]
-        private Vector3 _extents;
+        private Vector3 _extents = Vector3.one;
 
         public Quaternion Rotation {
             get => _rotation;
@@ -182,10 +230,9 @@ namespace Spookline.SPC.Cleaver.Points {
             }
         }
 
-        public override void DrawHandles(AffineTransform transform, HandlesDrawingApi draw) {
-            DefaultHandleDrawers.Position(transform, draw, this);
-            DefaultHandleDrawers.Rotation(transform, draw, this);
-            DefaultHandleDrawers.BoundingBox(transform, draw, this);
+        public override void DrawHandles(AffineTransform transform) {
+            DefaultHandleDrawers.Transform(transform, this);
+            DefaultHandleDrawers.BoundingBox(transform, this);
         }
 
         public override CleaverPoint Materialize(AffineTransform transform) {
@@ -219,7 +266,7 @@ namespace Spookline.SPC.Cleaver.Points {
     public class EditableTransformPoint : EditablePoint, IRotatablePoint, IScalablePoint {
 
         [OdinSerialize]
-        private Quaternion _rotation;
+        private Quaternion _rotation = Quaternion.identity;
 
         [OdinSerialize]
         private Vector3 _scale = Vector3.one;
@@ -237,15 +284,11 @@ namespace Spookline.SPC.Cleaver.Points {
         public override void DrawEditor(AffineTransform transform, IDrawingAPI draw) {
             var localTransform = new AffineTransform(position, Rotation, Scale);
             var worldTransform = math.mul(transform, localTransform);
-            using (draw.Scope((float4x4)worldTransform)) {
-                draw.Sphere(Vector3.zero, 0.25f);
-            }
+            using (draw.Scope((float4x4)worldTransform)) { draw.Sphere(Vector3.zero, 0.25f); }
         }
 
-        public override void DrawHandles(AffineTransform transform, HandlesDrawingApi draw) {
-            DefaultHandleDrawers.Position(transform, draw, this);
-            DefaultHandleDrawers.Rotation(transform, draw, this);
-            DefaultHandleDrawers.Scale(transform, draw, this);
+        public override void DrawHandles(AffineTransform transform) {
+            DefaultHandleDrawers.TransformScale(transform, this);
         }
 
         public override CleaverPoint Materialize(AffineTransform transform) {
