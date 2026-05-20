@@ -16,6 +16,7 @@ namespace Spookline.SPC.Cleaver.Editor {
     )]
     public sealed class CleaverPointTool : EditorTool {
 
+        [SerializeField]
         private int _selectedPointIndex = -1;
 
         public override GUIContent toolbarIcon =>
@@ -37,10 +38,22 @@ namespace Spookline.SPC.Cleaver.Editor {
                 virtualTransform.scale
             );
 
+            // Perform selection
+            for (var i = 0; i < section.points.Count; i++) {
+                var point = section.points[i];
+                if (DrawPointLabel(affine, point, i, i == _selectedPointIndex)) {
+                    Undo.IncrementCurrentGroup();
+                    Undo.SetCurrentGroupName($"Select Cleaver Point {i}");
+                    Undo.RecordObject(this, $"Select Cleaver Point {i}");
+                    _selectedPointIndex = i;
+                    Undo.FlushUndoRecordObjects();
+                    break;
+                }
+            }
+
             // Draw all points
             for (var i = 0; i < section.points.Count; i++) {
                 var point = section.points[i];
-                if (DrawPointLabel(affine, point, i, i == _selectedPointIndex)) { _selectedPointIndex = i; }
                 if (i == _selectedPointIndex) { DrawPointHandles(section, affine, point); }
             }
         }
@@ -68,20 +81,45 @@ namespace Spookline.SPC.Cleaver.Editor {
             return clicked;
         }
 
+
+        private int _currentGroup = -1;
+        private int _active = -1;
         private void DrawPointHandles(CleaverSection section, AffineTransform transform, EditablePoint point) {
+            point.editorData ??= new Dictionary<string, object>();
+            var clone = point.Clone();
+            clone.editorData = point.editorData;
+
+            int previous = GUIUtility.hotControl;
             EditorGUI.BeginChangeCheck();
             try {
                 EditablePoint.CurrentSection = section;
-                Undo.RecordObject(section, "Edit Cleaver Point");
-                point.DrawHandles(transform);
-                Undo.FlushUndoRecordObjects();
+                clone.DrawHandles(transform);
             } finally {
                 EditablePoint.CurrentSection = null;
             }
-
             if (EditorGUI.EndChangeCheck()) {
-                EditorUtility.SetDirty(section);
-                EditorSceneManager.MarkSceneDirty(section.gameObject.scene);
+
+                Undo.RecordObject(section, "Edit Cleaver Point");
+                point.CopyFrom(clone);
+            }
+
+            int current = GUIUtility.hotControl;
+            if (previous != current) {
+                if (_active == previous) {
+                    _active = -1;
+                    Undo.FlushUndoRecordObjects();
+                    if (_currentGroup != -1) Undo.CollapseUndoOperations(_currentGroup);
+                    _currentGroup = -1;
+                } else {
+                    _active = current;
+                    Undo.IncrementCurrentGroup();
+                    Undo.SetCurrentGroupName("Edit Cleaver Point");
+                    _currentGroup = Undo.GetCurrentGroup();
+
+                    EditorUtility.SetDirty(section);
+                    EditorSceneManager.MarkSceneDirty(section.gameObject.scene);
+                }
+
             }
 
         }

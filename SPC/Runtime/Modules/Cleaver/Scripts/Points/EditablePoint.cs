@@ -31,6 +31,9 @@ namespace Spookline.SPC.Cleaver.Points {
         public abstract void DrawHandles(AffineTransform transform);
         public abstract CleaverPoint Materialize(AffineTransform transform);
 
+        public abstract EditablePoint Clone();
+        public abstract void CopyFrom(EditablePoint other);
+
     }
 
     public interface IRotatablePoint {
@@ -243,6 +246,20 @@ namespace Spookline.SPC.Cleaver.Points {
             return new OrientedBoxPoint(this, new OrientedBox(p, e, r));
         }
 
+        public override EditablePoint Clone() =>
+            new EditableOrientedBoxPoint {
+                position = position,
+                Rotation = Rotation,
+                Extents = Extents,
+            };
+
+        public override void CopyFrom(EditablePoint other) {
+            if (other is not EditableOrientedBoxPoint o) return;
+            position = o.position;
+            Rotation = o.Rotation;
+            Extents = o.Extents;
+        }
+
     }
 
     public class TransformPoint : CleaverPoint<EditableTransformPoint> {
@@ -295,6 +312,20 @@ namespace Spookline.SPC.Cleaver.Points {
             var localTransform = new AffineTransform(position, Rotation, Scale);
             var worldTransform = math.mul(transform, localTransform);
             return new TransformPoint(this, worldTransform);
+        }
+
+        public override EditablePoint Clone() =>
+            new EditableTransformPoint {
+                position = position,
+                Rotation = Rotation,
+                Scale = Scale
+            };
+
+        public override void CopyFrom(EditablePoint other) {
+            if (other is not EditableTransformPoint o) return;
+            position = o.position;
+            Rotation = o.Rotation;
+            Scale = o.Scale;
         }
 
     }
