@@ -34,13 +34,24 @@ namespace Spookline.SPC.Cleaver {
         [NonSerialized]
         public readonly List<CleaverPortal> portals = new();
 
-        public List<CleaverPoint> points = new();
+        public List<EditablePoint> points = new();
+
+        [NonSerialized]
+        public List<CleaverPoint> runtimePoints = new();
 
         public ulong Id { get; private set; }
 
         private void Awake() {
             Id = IdGenerator.NextId();
             On<GizmoEvt>().Do(OnGizmos);
+
+            runtimePoints = new();
+            foreach (var point in points) {
+                var materialized = point.Materialize(
+                    new AffineTransform(transform.position, transform.rotation, transform.lossyScale)
+                );
+                runtimePoints.Add(materialized);
+            }
         }
 
         private void OnGizmos(ref GizmoEvt args) {
@@ -77,6 +88,11 @@ namespace Spookline.SPC.Cleaver {
             }
 
             // Runtime Gizmos
+
+            if (runtimePoints != null) {
+                foreach (var point in runtimePoints) { point.Gizmos(ref args); }
+            }
+
             if (!args.HasFlag("cleaver_sections")) return;
             var env = CleaverEnvironment.Instance;
             if (!env.sectionLookup.TryGetValue(Id, out var idx)) return;

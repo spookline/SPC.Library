@@ -156,7 +156,6 @@ namespace Spookline.SPC.Draw {
                     lastUsedTime = Time.time
                 };
                 _meshBufferCache.Add(mesh, cacheEntry);
-                Debug.Log($"[PolyDrawRenderer] Cached mesh buffer for mesh '{mesh.name}'", mesh);
             } else { cacheEntry.lastUsedTime = Time.time; }
 
             if (!cacheEntry.meshBuffer.IsCreated) {

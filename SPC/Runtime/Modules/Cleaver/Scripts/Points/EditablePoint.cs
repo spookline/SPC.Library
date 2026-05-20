@@ -1,0 +1,258 @@
+using System;
+using System.Collections.Generic;
+using Sirenix.Serialization;
+using Spookline.SPC.Debugging;
+using Spookline.SPC.Draw;
+using Spookline.SPC.Geometry;
+using Unity.Mathematics;
+using UnityEngine;
+
+#if UNITY_EDITOR
+using UnityEditor;
+using UnityEditor.IMGUI.Controls;
+#endif
+
+namespace Spookline.SPC.Cleaver.Points {
+    [Serializable]
+    public abstract class EditablePoint {
+
+        [OdinSerialize]
+        public Vector3 position;
+
+#if UNITY_EDITOR
+        [NonSerialized]
+        public Dictionary<string, object> editorData = new();
+#endif
+
+        public abstract void DrawEditor(AffineTransform transform, IDrawingAPI draw);
+
+        public abstract void DrawHandles(AffineTransform transform, HandlesDrawingApi draw);
+        public abstract CleaverPoint Materialize(AffineTransform transform);
+
+    }
+
+    public interface IRotatablePoint {
+
+        public Quaternion Rotation { get; set; }
+
+    }
+
+    public interface IScalablePoint {
+
+        public Vector3 Scale { get; set; }
+
+    }
+
+    public interface IBoundingPoint {
+
+        public Vector3 Extents { get; set; }
+
+    }
+
+    public abstract class CleaverPoint {
+
+        public virtual void Gizmos(ref GizmoEvt evt) { }
+
+    }
+
+    public abstract class CleaverPoint<T> : CleaverPoint where T : EditablePoint {
+
+        public T source;
+
+        protected CleaverPoint() { }
+
+        protected CleaverPoint(T source) {
+            this.source = source;
+        }
+
+    }
+
+
+    public static class DefaultHandleDrawers {
+
+        public static void Position(AffineTransform transform, HandlesDrawingApi draw, EditablePoint point) {
+#if UNITY_EDITOR
+            using (new Handles.DrawingScope((float4x4)transform)) {
+                var next = Handles.PositionHandle(point.position, Quaternion.identity);
+                point.position = next;
+            }
+#endif
+        }
+
+        public static void Rotation<T>(AffineTransform transform, HandlesDrawingApi draw, T point)
+            where T : EditablePoint, IRotatablePoint {
+#if UNITY_EDITOR
+            using (new Handles.DrawingScope((float4x4)transform)) {
+                var next = Handles.RotationHandle(point.Rotation, point.position);
+                point.Rotation = next;
+            }
+#endif
+        }
+
+        public static void Scale<T>(AffineTransform transform, HandlesDrawingApi draw, T point)
+            where T : EditablePoint, IScalablePoint {
+#if UNITY_EDITOR
+            using (new Handles.DrawingScope((float4x4)transform)) {
+                var next = Handles.ScaleHandle(point.Scale, point.position, Quaternion.identity, 1f);
+                point.Scale = next;
+            }
+#endif
+        }
+
+        public static void BoundingBox<T>(AffineTransform transform, HandlesDrawingApi draw, T point)
+            where T : EditablePoint, IBoundingPoint, IRotatablePoint {
+#if UNITY_EDITOR
+            const string handleKey = "boundsHandle";
+
+            if (point.editorData == null) point.editorData = new Dictionary<string, object>();
+
+            if (!point.editorData.TryGetValue(handleKey, out var handleObj) ||
+                handleObj is not BoxBoundsHandle boundsHandle) {
+                boundsHandle = new BoxBoundsHandle();
+                point.editorData[handleKey] = boundsHandle;
+            }
+
+            var localMatrix = Matrix4x4.TRS(point.position, point.Rotation, Vector3.one);
+            var transformMatrix = (Matrix4x4)(float4x4)transform;
+            var worldMatrix = transformMatrix * localMatrix;
+
+            var worldPos = worldMatrix.MultiplyPoint3x4(Vector3.zero);
+            var wordRot = worldMatrix.rotation;
+            var drawingMatrix = Matrix4x4.TRS(worldPos, wordRot, Vector3.one);
+            using (new Handles.DrawingScope(drawingMatrix)) {
+                boundsHandle.center = Vector3.zero;
+                boundsHandle.size = point.Extents;
+
+                EditorGUI.BeginChangeCheck();
+                boundsHandle.DrawHandle();
+                if (EditorGUI.EndChangeCheck()) {
+                    point.Extents = boundsHandle.size;
+                    var newWorldPos = drawingMatrix.MultiplyPoint3x4(boundsHandle.center);
+                    //point.position = Matrix4x4.Inverse(transformMatrix) * newWorldPos;
+                    point.position = math.transform(math.inverse(transform), newWorldPos);
+                }
+            }
+#endif
+        }
+
+    }
+
+    public class OrientedBoxPoint : CleaverPoint<EditableOrientedBoxPoint> {
+
+        public OrientedBox Box { get; }
+
+        public OrientedBoxPoint(EditableOrientedBoxPoint source, OrientedBox box) : base(source) {
+            Box = box;
+        }
+
+        public override void Gizmos(ref GizmoEvt evt) {
+            if (evt.DrawingPass(out var draw)) {
+                draw.OrientedBox(Box);
+                draw.Sphere(Box.LocalGroundCenter, 0.5f);
+            }
+        }
+
+    }
+
+    [Serializable]
+    public class EditableOrientedBoxPoint : EditablePoint, IRotatablePoint, IBoundingPoint {
+
+        [OdinSerialize]
+        private Quaternion _rotation;
+
+        [OdinSerialize]
+        private Vector3 _extents;
+
+        public Quaternion Rotation {
+            get => _rotation;
+            set => _rotation = value;
+        }
+
+        public Vector3 Extents {
+            get => _extents;
+            set => _extents = value;
+        }
+
+
+        public override void DrawEditor(AffineTransform transform, IDrawingAPI draw) {
+            var box = new OrientedBox(position, Extents, Rotation);
+            using (draw.Scope((float4x4)transform)) {
+                draw.OrientedBox(box);
+                draw.Sphere(box.LocalGroundCenter, 0.5f);
+            }
+        }
+
+        public override void DrawHandles(AffineTransform transform, HandlesDrawingApi draw) {
+            DefaultHandleDrawers.Position(transform, draw, this);
+            DefaultHandleDrawers.Rotation(transform, draw, this);
+            DefaultHandleDrawers.BoundingBox(transform, draw, this);
+        }
+
+        public override CleaverPoint Materialize(AffineTransform transform) {
+            math.decompose(transform, out _, out var rotation, out var scale);
+            var p = math.transform(transform, position);
+            var r = rotation * Rotation;
+            var e = Extents * scale;
+            return new OrientedBoxPoint(this, new OrientedBox(p, e, r));
+        }
+
+    }
+
+    public class TransformPoint : CleaverPoint<EditableTransformPoint> {
+
+        public AffineTransform Transform { get; }
+
+        public TransformPoint(EditableTransformPoint source, AffineTransform transform) : base(source) {
+            Transform = transform;
+        }
+
+        public override void Gizmos(ref GizmoEvt evt) {
+            if (evt.DrawingPass(out var draw)) {
+                var pos = math.transform(Transform, Vector3.zero);
+                draw.Sphere(pos, 0.25f);
+            }
+        }
+
+    }
+
+    [Serializable]
+    public class EditableTransformPoint : EditablePoint, IRotatablePoint, IScalablePoint {
+
+        [OdinSerialize]
+        private Quaternion _rotation;
+
+        [OdinSerialize]
+        private Vector3 _scale = Vector3.one;
+
+        public Quaternion Rotation {
+            get => _rotation;
+            set => _rotation = value;
+        }
+
+        public Vector3 Scale {
+            get => _scale;
+            set => _scale = value;
+        }
+
+        public override void DrawEditor(AffineTransform transform, IDrawingAPI draw) {
+            var localTransform = new AffineTransform(position, Rotation, Scale);
+            var worldTransform = math.mul(transform, localTransform);
+            using (draw.Scope((float4x4)worldTransform)) {
+                draw.Sphere(Vector3.zero, 0.25f);
+            }
+        }
+
+        public override void DrawHandles(AffineTransform transform, HandlesDrawingApi draw) {
+            DefaultHandleDrawers.Position(transform, draw, this);
+            DefaultHandleDrawers.Rotation(transform, draw, this);
+            DefaultHandleDrawers.Scale(transform, draw, this);
+        }
+
+        public override CleaverPoint Materialize(AffineTransform transform) {
+            var localTransform = new AffineTransform(position, Rotation, Scale);
+            var worldTransform = math.mul(transform, localTransform);
+            return new TransformPoint(this, worldTransform);
+        }
+
+    }
+}
