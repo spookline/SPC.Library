@@ -33,6 +33,9 @@ namespace Spookline.SPC.Cleaver.Points {
 
         public abstract EditablePoint Clone();
         public abstract void CopyFrom(EditablePoint other);
+        public virtual string TypeName => "Point";
+
+        public virtual void DrawOverlayGUI() { }
 
     }
 
@@ -260,6 +263,16 @@ namespace Spookline.SPC.Cleaver.Points {
             Extents = o.Extents;
         }
 
+        public override string TypeName => "Box";
+
+        public override void DrawOverlayGUI() {
+#if UNITY_EDITOR
+            position = EditorGUILayout.Vector3Field("Position", position);
+            _rotation = Quaternion.Euler(EditorGUILayout.Vector3Field("Rotation", Rotation.eulerAngles));
+            _extents = EditorGUILayout.Vector3Field("Extents", Extents);
+#endif
+        }
+
     }
 
     public class TransformPoint : CleaverPoint<EditableTransformPoint> {
@@ -326,6 +339,17 @@ namespace Spookline.SPC.Cleaver.Points {
             position = o.position;
             Rotation = o.Rotation;
             Scale = o.Scale;
+        }
+
+        public override string TypeName => "Transform";
+
+
+        public override void DrawOverlayGUI() {
+#if UNITY_EDITOR
+            position = EditorGUILayout.Vector3Field("Position", position);
+            Rotation = Quaternion.Euler(EditorGUILayout.Vector3Field("Rotation", Rotation.eulerAngles));
+            Scale = EditorGUILayout.Vector3Field("Scale", Scale);
+#endif
         }
 
     }

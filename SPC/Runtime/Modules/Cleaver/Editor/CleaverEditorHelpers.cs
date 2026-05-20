@@ -1,10 +1,80 @@
+using System;
 using Spookline.SPC.Geometry;
 using Unity.Mathematics;
 using UnityEditor;
+using UnityEditor.SceneManagement;
 using UnityEngine;
+using Object = UnityEngine.Object;
 
 namespace Spookline.SPC.Cleaver.Editor {
     public class CleaverEditorHelpers {
+
+        public static void GuardedUndo(
+            Object target,
+            Action run,
+            Action apply,
+            string name,
+            ref int active,
+            ref int activeGroup
+        ) {
+            var previous = -1;
+            BeginGuarded(target, ref previous, ref active, ref activeGroup);
+            try { run(); } finally { EndGuarded(target, name, ref previous, ref active, ref activeGroup, apply); }
+        }
+
+        public static void BeginGuarded(Object target, ref int previous, ref int active, ref int activeGroup) {
+            previous = GUIUtility.hotControl;
+            EditorGUI.BeginChangeCheck();
+        }
+
+        public static void EndGuarded(
+            Object target,
+            string name,
+            ref int previous,
+            ref int active,
+            ref int activeGroup,
+            Action apply
+        ) {
+            if (EditorGUI.EndChangeCheck()) {
+                if (active == -1) {
+                    BeginFlushedUndo(target, name);
+                    apply();
+                    EndFlushedUndo(target);
+                } else {
+                    Undo.RecordObject(target, name);
+                    apply();
+                }
+            }
+
+            int current = GUIUtility.hotControl;
+            if (previous != current) {
+                if (active == previous) {
+                    active = -1;
+                    Undo.FlushUndoRecordObjects();
+                    if (activeGroup != -1) Undo.CollapseUndoOperations(activeGroup);
+                    activeGroup = -1;
+                } else {
+                    active = current;
+                    Undo.IncrementCurrentGroup();
+                    Undo.SetCurrentGroupName(name);
+                    activeGroup = Undo.GetCurrentGroup();
+
+                    EditorUtility.SetDirty(target);
+                }
+            }
+        }
+
+        public static void BeginFlushedUndo(Object target, string name) {
+            Undo.IncrementCurrentGroup();
+            Undo.SetCurrentGroupName(name);
+            Undo.RecordObject(target, name);
+        }
+
+        public static void EndFlushedUndo(Object target) {
+            EditorUtility.SetDirty(target);
+            Undo.CollapseUndoOperations(Undo.GetCurrentGroup());
+            Undo.IncrementCurrentGroup();
+        }
 
         public static void DrawObbWithLabel(OrientedBoxQuery box, string label, Color wireColor) {
             // Draw OBB using the axis information from OrientedBoxQuery

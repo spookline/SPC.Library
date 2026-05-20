@@ -16,6 +16,8 @@ namespace Spookline.SPC.Cleaver.Editor {
     )]
     public sealed class CleaverPointTool : EditorTool {
 
+        public static int SelectedPointIndex { get; private set; } = -1;
+
         [SerializeField]
         private int _selectedPointIndex = -1;
 
@@ -23,6 +25,7 @@ namespace Spookline.SPC.Cleaver.Editor {
             new(EditorGUIUtility.IconContent("d_PreMatSphere").image, "Edit Cleaver Points");
 
         public override void OnToolGUI(EditorWindow window) {
+            SelectedPointIndex = _selectedPointIndex;
             var section = Selection.activeTransform
                 ? Selection.activeTransform.GetComponentInParent<CleaverSection>()
                 : null;
@@ -46,6 +49,7 @@ namespace Spookline.SPC.Cleaver.Editor {
                     Undo.SetCurrentGroupName($"Select Cleaver Point {i}");
                     Undo.RecordObject(this, $"Select Cleaver Point {i}");
                     _selectedPointIndex = i;
+                    SelectedPointIndex = i;
                     Undo.FlushUndoRecordObjects();
                     break;
                 }
@@ -63,17 +67,26 @@ namespace Spookline.SPC.Cleaver.Editor {
 
             Handles.BeginGUI();
             var screenPos = HandleUtility.WorldToGUIPoint(worldPos);
-            var bgWidth = 30f;
+            var typeName = point.TypeName;
+            var indexStr = index.ToString();
+
+            var labelStyle = EditorStyles.miniLabel;
+            var typeNameWidth = labelStyle.CalcSize(new GUIContent(typeName)).x + 4f;
+
+            var bgWidth = 30f + typeNameWidth;
             var bgHeight = 16f;
             var bgStartX = screenPos.x - bgWidth / 2f;
             var bgRect = new Rect(bgStartX, screenPos.y, bgWidth, bgHeight);
             var buttonRect = new Rect(bgStartX, screenPos.y, 30f, bgHeight);
+            var labelRect = new Rect(bgStartX + 30f, screenPos.y, typeNameWidth, bgHeight);
 
             GUI.backgroundColor = Color.black;
             GUI.Box(bgRect, "");
             GUI.backgroundColor = selected ? Color.yellow : Color.gray;
 
-            var clicked = GUI.Button(buttonRect, index.ToString());
+            var clicked = GUI.Button(buttonRect, indexStr);
+
+            GUI.Label(labelRect, typeName, labelStyle);
 
             GUI.backgroundColor = Color.white;
             Handles.EndGUI();
@@ -82,46 +95,28 @@ namespace Spookline.SPC.Cleaver.Editor {
         }
 
 
-        private int _currentGroup = -1;
-        private int _active = -1;
+        private static int _currentGroup = -1;
+        private static int _active = -1;
         private void DrawPointHandles(CleaverSection section, AffineTransform transform, EditablePoint point) {
             point.editorData ??= new Dictionary<string, object>();
             var clone = point.Clone();
             clone.editorData = point.editorData;
 
-            int previous = GUIUtility.hotControl;
-            EditorGUI.BeginChangeCheck();
-            try {
-                EditablePoint.CurrentSection = section;
-                clone.DrawHandles(transform);
-            } finally {
-                EditablePoint.CurrentSection = null;
-            }
-            if (EditorGUI.EndChangeCheck()) {
-
-                Undo.RecordObject(section, "Edit Cleaver Point");
-                point.CopyFrom(clone);
-            }
-
-            int current = GUIUtility.hotControl;
-            if (previous != current) {
-                if (_active == previous) {
-                    _active = -1;
-                    Undo.FlushUndoRecordObjects();
-                    if (_currentGroup != -1) Undo.CollapseUndoOperations(_currentGroup);
-                    _currentGroup = -1;
-                } else {
-                    _active = current;
-                    Undo.IncrementCurrentGroup();
-                    Undo.SetCurrentGroupName("Edit Cleaver Point");
-                    _currentGroup = Undo.GetCurrentGroup();
-
-                    EditorUtility.SetDirty(section);
-                    EditorSceneManager.MarkSceneDirty(section.gameObject.scene);
-                }
-
-            }
-
+            CleaverEditorHelpers.GuardedUndo(
+                section,
+                () => {
+                    try {
+                        EditablePoint.CurrentSection = section;
+                        clone.DrawHandles(transform);
+                    } finally {
+                        EditablePoint.CurrentSection = null;
+                    }
+                },
+                () => point.CopyFrom(clone),
+                $"Edit Cleaver Point {SelectedPointIndex} from Handles",
+                ref _active,
+                ref _currentGroup
+            );
         }
 
     }
