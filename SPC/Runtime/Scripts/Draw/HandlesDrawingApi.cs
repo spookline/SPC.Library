@@ -129,6 +129,15 @@ namespace Spookline.SPC.Draw {
             DrawingApiDefaults<HandlesDrawingApi>.WireMesh(this, mesh);
         }
 
+        public void LineBuffer(PolyDrawBuffer buffer) {
+            DrawingApiDefaults<HandlesDrawingApi>.LineBuffer(this, buffer);
+        }
+
+        public void MeshBuffer(PolyDrawBuffer buffer) {
+            DrawingApiDefaults<HandlesDrawingApi>.MeshBuffer(this, buffer);
+        }
+
+
 #if UNITY_EDITOR
         public Matrix4x4 Matrix {
             get => Handles.matrix;

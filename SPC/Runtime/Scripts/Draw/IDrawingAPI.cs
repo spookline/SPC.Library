@@ -34,6 +34,9 @@ namespace Spookline.SPC.Draw {
         void Mesh(Mesh mesh);
         void WireMesh(Mesh mesh);
 
+        void LineBuffer(PolyDrawBuffer buffer);
+        void MeshBuffer(PolyDrawBuffer buffer);
+
         Matrix4x4 Matrix { get; set; }
         Color Color { get; set; }
 
@@ -50,9 +53,7 @@ namespace Spookline.SPC.Draw {
         }
 
         public static void Triangles(T api, ReadOnlySpan<Vector3> points) {
-            for (var i = 0; i + 2 < points.Length; i += 3) {
-                Triangle(api, points[i], points[i + 1], points[i + 2]);
-            }
+            for (var i = 0; i + 2 < points.Length; i += 3) { Triangle(api, points[i], points[i + 1], points[i + 2]); }
         }
 
         public static void Quad(T api, Vector3 a, Vector3 b, Vector3 c, Vector3 d) {
@@ -472,6 +473,59 @@ namespace Spookline.SPC.Draw {
 
                     lines[lineIndex++] = c;
                     lines[lineIndex++] = a;
+                }
+
+                api.Lines(lines);
+            }
+        }
+
+        public static void MeshBuffer(T api, PolyDrawBuffer buffer) {
+            var indices = buffer.indices;
+            var vertices = buffer.vertices;
+
+            if (indices.Length > 128) {
+                var array = ArrayPool<Vector3>.Shared.Rent(indices.Length);
+                try { Render(array.AsSpan(0, indices.Length)); } finally { ArrayPool<Vector3>.Shared.Return(array); }
+            } else {
+                Span<Vector3> span = stackalloc Vector3[indices.Length];
+                Render(span);
+            }
+
+            return;
+
+            void Render(Span<Vector3> triangles) {
+                var triangleIndex = 0;
+                for (var i = 0; i < indices.Length; i++) {
+                    var vertexIndex = indices[i];
+                    var v = vertices[vertexIndex];
+                    triangles[triangleIndex++] = v.position;
+                }
+
+                api.Triangles(triangles);
+            }
+        }
+
+        public static void LineBuffer(T api, PolyDrawBuffer buffer) {
+            var indices = buffer.indices;
+            var vertices = buffer.vertices;
+
+            if (indices.Length > 128) {
+                var array = ArrayPool<Vector3>.Shared.Rent(indices.Length);
+                try { Render(array.AsSpan(0, indices.Length)); } finally { ArrayPool<Vector3>.Shared.Return(array); }
+            } else {
+                Span<Vector3> span = stackalloc Vector3[indices.Length];
+                Render(span);
+            }
+
+            return;
+
+            void Render(Span<Vector3> lines) {
+                var lineIndex = 0;
+
+                for (var i = 0; i < indices.Length; i++) {
+                    var vertexIndex = indices[i];
+                    var v = vertices[vertexIndex];
+                    lines[lineIndex++] = v.position;
                 }
 
                 api.Lines(lines);

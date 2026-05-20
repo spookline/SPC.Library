@@ -95,6 +95,14 @@ namespace Spookline.SPC.Draw {
             DrawingApiDefaults<BufferedGlDrawingApi>.Mesh(this, mesh);
         }
 
+        public void LineBuffer(PolyDrawBuffer buffer) {
+            DrawingApiDefaults<BufferedGlDrawingApi>.LineBuffer(this, buffer);
+        }
+
+        public void MeshBuffer(PolyDrawBuffer buffer) {
+            DrawingApiDefaults<BufferedGlDrawingApi>.MeshBuffer(this, buffer);
+        }
+
         public void Cube(Vector3 center, Vector3 size) {
             DrawingApiDefaults<BufferedGlDrawingApi>.Cube(this, center, size);
         }

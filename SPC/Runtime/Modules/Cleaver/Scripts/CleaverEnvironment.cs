@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.Linq;
 using Sirenix.OdinInspector;
 using Spookline.SPC.Debugging;
+using Spookline.SPC.Draw;
 using Spookline.SPC.Events;
 using Spookline.SPC.Ext;
 using Unity.AI.Navigation;
@@ -59,8 +60,14 @@ namespace Spookline.SPC.Cleaver {
 
         [NonSerialized]
         public NavMeshSurface surface;
+
         [NonSerialized]
         public NativeArray<CleaverVolumeData> volumes;
+
+        [NonSerialized]
+        public NavMeshTriangulation triangulation;
+        [NonSerialized]
+        public PolyDrawBuffer drawBuffer;
 
         public uint Version { get; private set; }
 
@@ -127,10 +134,25 @@ namespace Spookline.SPC.Cleaver {
             Debug.Log("Cleaver environment awake", this);
 
             On<CollectDebugFlagsEvt>().Do(OnCollectDebugFlags);
+            On<GizmoEvt>().Do(OnGizmo);
+        }
+
+        private void OnGizmo(ref GizmoEvt args) {
+            if (!args.HasFlag("cleaver_navmesh")) return;
+            if (!drawBuffer.IsCreated) {
+                triangulation = NavMesh.CalculateTriangulation();
+                var color = Color.magenta;
+                color.a = 0.25f;
+                drawBuffer = PolyDrawBuffer.From(triangulation.vertices, triangulation.indices, color, true);
+            }
+
+            if (args.DrawingPass(out var draw)) {
+                using(draw.Scope(PolyDrawBuffer.KeepColor)) draw.MeshBuffer(drawBuffer);
+            }
         }
 
         private void OnCollectDebugFlags(ref CollectDebugFlagsEvt args) {
-            args.Add("cleaver_portals", "cleaver_viewers", "cleaver_proxies", "cleaver_sections");
+            args.Add("cleaver_portals", "cleaver_viewers", "cleaver_proxies", "cleaver_sections", "cleaver_navmesh");
         }
 
         protected override void OnEnable() {
@@ -151,6 +173,8 @@ namespace Spookline.SPC.Cleaver {
         protected override void OnDisable() {
             base.OnDisable();
             DiscardBakedData();
+
+            if (drawBuffer.IsCreated) drawBuffer.Dispose();
 
             proxyLookup.Dispose();
             portalLookup.Dispose();

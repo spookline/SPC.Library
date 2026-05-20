@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Sirenix.OdinInspector;
+using Spookline.SPC.Cleaver.Points;
 using Spookline.SPC.Common;
 using Spookline.SPC.Debugging;
 using Spookline.SPC.Draw;
@@ -33,6 +34,8 @@ namespace Spookline.SPC.Cleaver {
         [NonSerialized]
         public readonly List<CleaverPortal> portals = new();
 
+        public List<CleaverPoint> points = new();
+
         public ulong Id { get; private set; }
 
         private void Awake() {
@@ -59,6 +62,17 @@ namespace Spookline.SPC.Cleaver {
                         draw.OrientedBox(wsBox, false);
                     }
                 }
+
+                if (points != null) {
+                    var affine = new AffineTransform(
+                        virtualTransform.position,
+                        virtualTransform.rotation,
+                        virtualTransform.scale
+                    );
+
+                    foreach (var point in points) { point.DrawEditor(affine, draw); }
+                }
+
                 return;
             }
 

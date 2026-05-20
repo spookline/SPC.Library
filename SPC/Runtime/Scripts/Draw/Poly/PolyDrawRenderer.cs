@@ -35,9 +35,9 @@ namespace Spookline.SPC.Draw {
 
         }
 
-        public struct TimedMeshBuffer {
+        public struct TimedBuffer {
 
-            public PolyDrawMeshBuffer buffer;
+            public PolyDrawBuffer buffer;
             public float remaining;
 
         }
@@ -45,7 +45,8 @@ namespace Spookline.SPC.Draw {
         private class MeshBufferCacheEntry {
 
             public Mesh mesh;
-            public PolyDrawMeshBuffer entry;
+            public PolyDrawBuffer meshBuffer;
+            public PolyDrawBuffer lineBuffer;
             public float lastUsedTime;
 
         }
@@ -54,7 +55,8 @@ namespace Spookline.SPC.Draw {
 
         private readonly List<TimedCommand> _timedCommands = new(128);
         private readonly List<TimedLine> _timedLines = new(256);
-        private readonly List<TimedMeshBuffer> _timedMeshBuffers = new(128);
+        private readonly List<TimedBuffer> _timedMeshBuffers = new(128);
+        private readonly List<TimedBuffer> _timedLineBuffers = new(128);
         private readonly Dictionary<Mesh, MeshBufferCacheEntry> _meshBufferCache = new();
         private readonly List<Mesh> _meshBufferCacheCleanupList = new();
         private bool _isDirty;
@@ -117,9 +119,21 @@ namespace Spookline.SPC.Draw {
             RequestEditorRepaint();
         }
 
-        public void AddMeshBuffer(PolyDrawMeshBuffer buffer, float duration) {
+        public void AddMeshBuffer(PolyDrawBuffer buffer, float duration) {
             _timedMeshBuffers.Add(
-                new TimedMeshBuffer {
+                new TimedBuffer {
+                    buffer = buffer,
+                    remaining = duration
+                }
+            );
+
+            _isDirty = true;
+            RequestEditorRepaint();
+        }
+
+        public void AddLineBuffer(PolyDrawBuffer buffer, float duration) {
+            _timedLineBuffers.Add(
+                new TimedBuffer {
                     buffer = buffer,
                     remaining = duration
                 }
@@ -139,16 +153,46 @@ namespace Spookline.SPC.Draw {
             if (!_meshBufferCache.TryGetValue(mesh, out var cacheEntry)) {
                 cacheEntry = new MeshBufferCacheEntry {
                     mesh = mesh,
-                    entry = PolyDrawMeshBuffer.FromMesh(mesh, color),
                     lastUsedTime = Time.time
                 };
                 _meshBufferCache.Add(mesh, cacheEntry);
                 Debug.Log($"[PolyDrawRenderer] Cached mesh buffer for mesh '{mesh.name}'", mesh);
             } else { cacheEntry.lastUsedTime = Time.time; }
 
-            var entry = cacheEntry.entry;
+            if (!cacheEntry.meshBuffer.IsCreated) {
+                cacheEntry.meshBuffer = PolyDrawBuffer.FromMesh(mesh, color);
+            }
+
+            var entry = cacheEntry.meshBuffer;
             entry.transform = useMatrix ? new AffineTransform(matrix) : AffineTransform.identity;
+            entry.color = PolyDrawCommandFactory.Color(color);
             AddMeshBuffer(entry, duration);
+        }
+
+        public void AddWireMesh(
+            Mesh mesh,
+            Color color,
+            float duration,
+            Matrix4x4 matrix = default,
+            bool useMatrix = false
+        ) {
+            if (!_meshBufferCache.TryGetValue(mesh, out var cacheEntry)) {
+                cacheEntry = new MeshBufferCacheEntry {
+                    mesh = mesh,
+                    lastUsedTime = Time.time
+                };
+                _meshBufferCache.Add(mesh, cacheEntry);
+            } else { cacheEntry.lastUsedTime = Time.time; }
+
+            if (!cacheEntry.lineBuffer.IsCreated) {
+                cacheEntry.lineBuffer = PolyDrawBuffer.FromMeshWire(mesh, color);
+            }
+
+
+            var entry = cacheEntry.lineBuffer;
+            entry.transform = useMatrix ? new AffineTransform(matrix) : AffineTransform.identity;
+            entry.color = PolyDrawCommandFactory.Color(color);
+            AddLineBuffer(entry, duration);
         }
 
         public void AddLines(
@@ -232,7 +276,8 @@ namespace Spookline.SPC.Draw {
             _timedCommands.Clear();
             _timedLines.Clear();
             _timedMeshBuffers.Clear();
-            _meshBufferCache.Clear();
+            _timedLineBuffers.Clear();
+            ClearMeshBufferCache();
             _isDirty = true;
 
             RebuildCommandsAndMesh();
@@ -251,6 +296,20 @@ namespace Spookline.SPC.Draw {
             if (Application.isPlaying) DontDestroyOnLoad(gameObject);
 
             RegisterEditorPump();
+        }
+
+        private void ClearMeshBufferCache() {
+            foreach (var entry in _meshBufferCache.Values) {
+                entry.lineBuffer.Dispose();
+                entry.meshBuffer.Dispose();
+            }
+            _meshBufferCache.Clear();
+            _meshBufferCacheCleanupList.Clear();
+        }
+
+        protected override void DisposeNativeData() {
+            base.DisposeNativeData();
+            ClearMeshBufferCache();
         }
 
         protected override void OnDisable() {
@@ -282,7 +341,8 @@ namespace Spookline.SPC.Draw {
         protected override void BuildCommands(
             ref PolyDrawCommandWriter writer,
             ref PolyDrawLineWriter lines,
-            ref PolyDrawMeshBufferWriter meshBuffers,
+            ref PolyDrawBufferWriter meshBuffers,
+            ref PolyDrawBufferWriter lineBuffers,
             bool isOffscreenFrame
         ) {
             var deltaTime = GetDeltaTime();
@@ -290,6 +350,7 @@ namespace Spookline.SPC.Draw {
             CompactCommands(ref writer, deltaTime);
             CompactLines(ref lines, deltaTime);
             CompactMeshBuffers(ref meshBuffers, deltaTime);
+            CompactLineBuffers(ref lineBuffers, deltaTime);
             ClearUnusedMeshBuffers();
 
             _lastTickTime = Time.time;
@@ -301,12 +362,15 @@ namespace Spookline.SPC.Draw {
             _meshBufferCacheCleanupList.Clear();
             foreach (var pair in _meshBufferCache) {
                 var entry = pair.Value;
-                if (entry.lastUsedTime + 0.25f < Time.time) { _meshBufferCacheCleanupList.Add(entry.mesh); }
+                if (entry.lastUsedTime + 0.25f < Time.time) {
+                    entry.meshBuffer.Dispose();
+                    entry.lineBuffer.Dispose();
+                    _meshBufferCacheCleanupList.Add(entry.mesh);
+                }
             }
 
             foreach (var mesh in _meshBufferCacheCleanupList) {
                 _meshBufferCache.Remove(mesh);
-                Debug.Log($"[PolyDrawRenderer] Removed mesh buffer cache for mesh '{mesh.name}' due to inactivity", mesh);
             }
         }
 
@@ -353,12 +417,12 @@ namespace Spookline.SPC.Draw {
             _isDirty = true;
         }
 
-        private void CompactMeshBuffers(ref PolyDrawMeshBufferWriter meshBuffers, float deltaTime) {
+        private void CompactMeshBuffers(ref PolyDrawBufferWriter buffers, float deltaTime) {
             var writeIndex = 0;
 
             for (var readIndex = 0; readIndex < _timedMeshBuffers.Count; readIndex++) {
                 var entry = _timedMeshBuffers[readIndex];
-                meshBuffers.Add(entry.buffer);
+                buffers.Add(entry.buffer);
                 entry.remaining -= deltaTime;
                 if (entry.remaining >= 0f) _timedMeshBuffers[writeIndex++] = entry;
             }
@@ -366,6 +430,22 @@ namespace Spookline.SPC.Draw {
             if (writeIndex >= _timedMeshBuffers.Count) return;
             _timedMeshBuffers.RemoveRange(writeIndex, _timedMeshBuffers.Count - writeIndex);
             _isDirty = true;
+        }
+
+        private void CompactLineBuffers(ref PolyDrawBufferWriter buffers, float deltaTime) {
+            var writeIndex = 0;
+
+            for (var readIndex = 0; readIndex < _timedLineBuffers.Count; readIndex++) {
+                var entry = _timedLineBuffers[readIndex];
+                buffers.Add(entry.buffer);
+                entry.remaining -= deltaTime;
+                if (entry.remaining >= 0f) _timedLineBuffers[writeIndex++] = entry;
+            }
+
+            if (writeIndex >= _timedLineBuffers.Count) return;
+            _timedLineBuffers.RemoveRange(writeIndex, _timedLineBuffers.Count - writeIndex);
+            _isDirty = true;
+
         }
 
         private float GetDeltaTime() {

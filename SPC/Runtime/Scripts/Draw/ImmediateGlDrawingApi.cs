@@ -33,6 +33,10 @@ namespace Spookline.SPC.Draw {
         private Matrix4x4 _matrix = Matrix4x4.identity;
         private Color _color = Color.white;
 
+        public void MeshBuffer(PolyDrawBuffer buffer) {
+            throw new NotImplementedException();
+        }
+
         public Matrix4x4 Matrix {
             get => _matrix;
             set => _matrix = value;
@@ -311,6 +315,11 @@ namespace Spookline.SPC.Draw {
 
         public void WireMesh(Mesh mesh) {
             DrawingApiDefaults<ImmediateGlDrawingApi>.WireMesh(this, mesh);
+        }
+
+        public void LineBuffer(PolyDrawBuffer buffer) {
+
+
         }
 
         public void Dispose() { }

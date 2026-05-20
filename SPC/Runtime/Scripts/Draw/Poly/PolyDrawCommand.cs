@@ -98,45 +98,113 @@ namespace Spookline.SPC.Draw {
 
     }
 
-    public struct PolyDrawMeshBuffer {
 
-        public PolyDrawVertex[] vertices;
-        public int[] indices;
+    public struct PolyDrawBuffer : IDisposable {
+
+        public NativeArray<PolyDrawVertex> vertices;
+        public NativeArray<int> indices;
         public AffineTransform transform;
+        public float4 color;
+
+        public static Color KeepColor = new(-1f, -1f, -1f, -1f);
 
 
-        public static PolyDrawMeshBuffer FromMesh(Mesh mesh, Color color, bool doubleSided = false) {
-            var vertices = mesh.vertices;
-            var indices = mesh.triangles;
-            var normals = mesh.normals;
-
-            var buffer = new PolyDrawMeshBuffer {
-                vertices = new PolyDrawVertex[vertices.Length],
-                indices = indices
+        public static PolyDrawBuffer From(Vector3[] vertices, int[] indices, Color color, bool doubleSided = false) {
+            var buffer = new PolyDrawBuffer {
+                vertices = new NativeArray<PolyDrawVertex>(vertices.Length, Allocator.Persistent),
+                indices = new NativeArray<int>(indices, Allocator.Persistent),
+                color = PolyDrawCommandFactory.Color(color),
+                transform = AffineTransform.identity
             };
 
+            var basis = new PolyDrawVertex {
+                color = PolyDrawCommandFactory.Color(color),
+                primitiveFlags = doubleSided ? PolyDrawShaderFlags.DoubleSided : 0f
+            };
             for (var i = 0; i < vertices.Length; i++) {
-                var v = new PolyDrawVertex {
-                    position = vertices[i],
-                    normal = normals[i],
-                    color = PolyDrawCommandFactory.Color(color),
-                    primitiveFlags = doubleSided ? PolyDrawShaderFlags.DoubleSided : 0f
-                };
+                var v = basis;
+                v.position = vertices[i];
                 buffer.vertices[i] = v;
             }
 
             return buffer;
         }
 
-        public static PolyDrawMeshBuffer FromMeshVertexColors(Mesh mesh, bool doubleSided = false) {
+        public static PolyDrawBuffer FromMesh(Mesh mesh, Color color, bool doubleSided = false) {
+            var vertices = mesh.vertices;
+            var indices = mesh.triangles;
+            var normals = mesh.normals;
+
+            var buffer = new PolyDrawBuffer {
+                vertices = new NativeArray<PolyDrawVertex>(vertices.Length, Allocator.Persistent),
+                indices = new NativeArray<int>(indices, Allocator.Persistent),
+                color = new float4(-1f),
+                transform = AffineTransform.identity
+            };
+
+            var basis = new PolyDrawVertex {
+                color = PolyDrawCommandFactory.Color(color),
+                primitiveFlags = doubleSided ? PolyDrawShaderFlags.DoubleSided : 0f
+            };
+            for (var i = 0; i < vertices.Length; i++) {
+                var v = basis;
+                v.position = vertices[i];
+                v.normal = normals[i];
+                buffer.vertices[i] = v;
+            }
+
+            return buffer;
+        }
+
+        public static PolyDrawBuffer FromMeshWire(Mesh mesh, Color color) {
+            var vertices = mesh.vertices;
+            var indices = mesh.triangles;
+            var buffer = new PolyDrawBuffer {
+                vertices = new NativeArray<PolyDrawVertex>(vertices.Length, Allocator.Persistent),
+                indices = new NativeArray<int>(indices.Length * 2, Allocator.Persistent),
+                color = new float4(-1f),
+                transform = AffineTransform.identity
+            };
+
+            for (var i = 0; i < vertices.Length; i++) {
+                var v = new PolyDrawVertex {
+                    position = vertices[i],
+                    color = PolyDrawCommandFactory.Color(color),
+                    primitiveFlags = PolyDrawShaderFlags.DoubleSided
+                };
+                buffer.vertices[i] = v;
+            }
+
+            var offset = 0;
+            for (var i = 0; i < indices.Length; i += 3) {
+                var i0 = indices[i];
+                var i1 = indices[i + 1];
+                var i2 = indices[i + 2];
+
+                buffer.indices[offset++] = i0;
+                buffer.indices[offset++] = i1;
+
+                buffer.indices[offset++] = i1;
+                buffer.indices[offset++] = i2;
+
+                buffer.indices[offset++] = i2;
+                buffer.indices[offset++] = i0;
+            }
+
+            return buffer;
+        }
+
+        public static PolyDrawBuffer FromMeshVertexColors(Mesh mesh, bool doubleSided = false) {
             var vertices = mesh.vertices;
             var indices = mesh.triangles;
             var normals = mesh.normals;
             var colors = mesh.colors;
 
-            var buffer = new PolyDrawMeshBuffer {
-                vertices = new PolyDrawVertex[vertices.Length],
-                indices = indices
+            var buffer = new PolyDrawBuffer {
+                vertices = new NativeArray<PolyDrawVertex>(vertices.Length, Allocator.Persistent),
+                indices = new NativeArray<int>(indices, Allocator.Persistent),
+                color = new float4(-1f),
+                transform = AffineTransform.identity
             };
 
             for (var i = 0; i < vertices.Length; i++) {
@@ -152,5 +220,11 @@ namespace Spookline.SPC.Draw {
             return buffer;
         }
 
+        public void Dispose() {
+            if (vertices.IsCreated) vertices.Dispose();
+            if (indices.IsCreated) indices.Dispose();
+        }
+
+        public bool IsCreated => vertices.IsCreated && indices.IsCreated;
     }
 }

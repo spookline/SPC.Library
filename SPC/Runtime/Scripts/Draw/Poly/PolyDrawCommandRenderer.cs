@@ -28,7 +28,8 @@ namespace Spookline.SPC.Draw {
 
         private NativeList<PolyDrawCommand> _commands;
         private NativeList<PolyDrawVertex> _directLineVertices;
-        private List<PolyDrawMeshBuffer> _meshBuffers;
+        private List<PolyDrawBuffer> _meshBuffers;
+        private List<PolyDrawBuffer> _lineBuffers;
 
         private Mesh _mesh;
         private MeshFilter _meshFilter;
@@ -89,6 +90,7 @@ namespace Spookline.SPC.Draw {
         public void RebuildCommandsAndMesh() {
             EnsureCreated();
             _meshBuffers.Clear();
+            _lineBuffers.Clear();
             _commands.Clear();
             _directLineVertices.Clear();
 
@@ -100,8 +102,9 @@ namespace Spookline.SPC.Draw {
 
             var primitiveWriter = new PolyDrawCommandWriter(_commands);
             var lineWriter = new PolyDrawLineWriter(_directLineVertices);
-            var meshBuffers = new PolyDrawMeshBufferWriter(_meshBuffers);
-            BuildCommands(ref primitiveWriter, ref lineWriter, ref meshBuffers, offscreenFrame);
+            var meshBuffers = new PolyDrawBufferWriter(_meshBuffers);
+            var lineBuffers = new PolyDrawBufferWriter(_lineBuffers);
+            BuildCommands(ref primitiveWriter, ref lineWriter, ref meshBuffers, ref lineBuffers, offscreenFrame);
 
             if (offscreenFrame) return;
 
@@ -112,7 +115,8 @@ namespace Spookline.SPC.Draw {
         protected abstract void BuildCommands(
             ref PolyDrawCommandWriter writer,
             ref PolyDrawLineWriter lines,
-            ref PolyDrawMeshBufferWriter meshBuffers,
+            ref PolyDrawBufferWriter meshBuffers,
+            ref PolyDrawBufferWriter lineBuffers,
             bool isOffscreenFrame
         );
 
@@ -191,9 +195,17 @@ namespace Spookline.SPC.Draw {
                     meshBufferIndexCount += buffer.indices.Length;
                 }
 
+                var lineBufferVertexCount = 0;
+                var lineBufferIndexCount = 0;
+                for (var i = 0; i < _lineBuffers.Count; i++) {
+                    var buffer = _lineBuffers[i];
+                    lineBufferVertexCount += buffer.vertices.Length;
+                    lineBufferIndexCount += buffer.indices.Length;
+                }
+
                 var totalLineVertexCount = wireVertexCount + lineVertexCount;
-                var totalVertexCount = meshVertexCount + totalLineVertexCount + meshBufferVertexCount;
-                var totalIndexCount = meshIndexCount + totalLineVertexCount + meshBufferIndexCount;
+                var totalVertexCount = meshVertexCount + totalLineVertexCount + meshBufferVertexCount + lineBufferVertexCount;
+                var totalIndexCount = meshIndexCount + totalLineVertexCount + meshBufferIndexCount + lineBufferIndexCount;
 
                 if (totalVertexCount == 0 || totalIndexCount == 0) {
                     _mesh.Clear();
@@ -233,23 +245,15 @@ namespace Spookline.SPC.Draw {
                             var indexSlice = indices.Slice(indexIndex, buffer.indices.Length);
                             indexSlice.CopyFrom(buffer.indices);
                             BurstCompiled.IncrementIndicesMonotonically(indexSlice, vertexIndex);
-                            // for (var j = 0; j < buffer.indices.Length; j++) {
-                            //     indices[indexIndex + j] = buffer.indices[j] + vertexIndex;
-                            // }
 
                             var slice = vertices.Slice(vertexIndex, buffer.vertices.Length);
                             slice.CopyFrom(buffer.vertices);
-                            BurstCompiled.TransformVertices(slice, buffer.transform);
-                            // for (var j = 0; j < buffer.vertices.Length; j++) {
-                            //     var vertex = buffer.vertices[j];
-                            //     vertex.position = math.transform(buffer.transform, vertex.position);
-                            //     vertex.normal = math.rotate(buffer.transform, vertex.normal);
-                            //     vertices[vertexIndex + j] = vertex;
-                            // }
+                            BurstCompiled.TransformVertices(slice, buffer.transform, buffer.color);
 
                             vertexIndex += buffer.vertices.Length;
                             indexIndex += buffer.indices.Length;
                         }
+
                     }
 
                     if (wireVertexCount > 0) {
@@ -279,12 +283,32 @@ namespace Spookline.SPC.Draw {
                         directLineDestinationOffset = meshVertexCount + wireVertexCount + meshBufferVertexCount
                     }.Run();
 
+                    if (lineBufferVertexCount > 0) {
+                        var vertexIndex = meshVertexCount + totalLineVertexCount + meshBufferVertexCount;
+                        var indexIndex = meshIndexCount + totalLineVertexCount + meshBufferIndexCount;
+                        for (var i = 0; i < _lineBuffers.Count; i++) {
+                            var buffer = _lineBuffers[i];
+
+                            var indexSlice = indices.Slice(indexIndex, buffer.indices.Length);
+                            indexSlice.CopyFrom(buffer.indices);
+                            BurstCompiled.IncrementIndicesMonotonically(indexSlice, vertexIndex);
+
+                            var slice = vertices.Slice(vertexIndex, buffer.vertices.Length);
+                            slice.CopyFrom(buffer.vertices);
+                            BurstCompiled.TransformVertices(slice, buffer.transform, buffer.color);
+
+                            vertexIndex += buffer.vertices.Length;
+                            indexIndex += buffer.indices.Length;
+                        }
+
+                    }
+
                     UploadMesh(
                         vertices,
                         indices,
                         meshVertexCount + meshBufferVertexCount,
                         meshIndexCount + meshBufferIndexCount,
-                        totalLineVertexCount,
+                        totalLineVertexCount + lineBufferVertexCount,
                         totalVertexCount,
                         totalIndexCount
                     );
@@ -356,7 +380,7 @@ namespace Spookline.SPC.Draw {
             if (lineVertexCount > 0) {
                 _mesh.SetSubMesh(
                     subMeshIndex,
-                    new SubMeshDescriptor(triangleIndexCount, lineVertexCount, MeshTopology.Lines) {
+                    new SubMeshDescriptor(triangleIndexCount, totalIndexCount - triangleIndexCount, MeshTopology.Lines) {
                         firstVertex = triangleVertexCount,
                         vertexCount = lineVertexCount
                     },
@@ -368,7 +392,8 @@ namespace Spookline.SPC.Draw {
         }
 
         private void EnsureCreated() {
-            if (_meshBuffers == null) _meshBuffers = new List<PolyDrawMeshBuffer>();
+            if (_meshBuffers == null) _meshBuffers = new List<PolyDrawBuffer>();
+            if (_lineBuffers == null) _lineBuffers = new List<PolyDrawBuffer>();
 
             if (!_commands.IsCreated)
                 _commands = new NativeList<PolyDrawCommand>(64, CommandAllocator);
@@ -428,7 +453,7 @@ namespace Spookline.SPC.Draw {
             return _fallbackMaterial;
         }
 
-        private void DisposeNativeData() {
+        protected virtual void DisposeNativeData() {
             if (_commands.IsCreated) _commands.Dispose();
             if (_directLineVertices.IsCreated) _directLineVertices.Dispose();
         }
@@ -532,7 +557,27 @@ namespace Spookline.SPC.Draw {
                     var v = arr[i];
                     v.position = math.transform(transform, v.position);
                     v.normal = math.rotate(transform, v.normal);
+                    arr[i] = v;
+                }
+            }
 
+            [BurstCompile]
+            public static void TransformVertices(
+                in NativeSlice<PolyDrawVertex> vertices,
+                in AffineTransform transform,
+                in float4 color
+            ) {
+                if (math.abs(color.w + 1f) < math.EPSILON) {
+                    TransformVertices(vertices, transform);
+                    return;
+                }
+
+                var arr = vertices;
+                for (var i = 0; i < arr.Length; i++) {
+                    var v = arr[i];
+                    v.position = math.transform(transform, v.position);
+                    v.normal = math.rotate(transform, v.normal);
+                    v.color = color;
                     arr[i] = v;
                 }
             }

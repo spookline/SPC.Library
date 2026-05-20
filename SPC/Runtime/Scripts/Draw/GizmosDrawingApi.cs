@@ -49,13 +49,20 @@ namespace Spookline.SPC.Draw {
 #if UNITY_EDITOR
             Gizmos.DrawMesh(mesh);
 #endif
-            DrawingApiDefaults<GizmosDrawingApi>.Mesh(this, mesh);
         }
 
         public void WireMesh(Mesh mesh) {
 #if UNITY_EDITOR
             Gizmos.DrawWireMesh(mesh);
 #endif
+        }
+
+        public void LineBuffer(PolyDrawBuffer buffer) {
+            DrawingApiDefaults<GizmosDrawingApi>.LineBuffer(this, buffer);
+        }
+
+        public void MeshBuffer(PolyDrawBuffer buffer) {
+            DrawingApiDefaults<GizmosDrawingApi>.MeshBuffer(this, buffer);
         }
 
         public void Quad(Vector3 a, Vector3 b, Vector3 c, Vector3 d) {

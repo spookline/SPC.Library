@@ -1,4 +1,5 @@
 using System;
+using Unity.Mathematics;
 using UnityEngine;
 
 namespace Spookline.SPC.Draw {
@@ -308,7 +309,27 @@ namespace Spookline.SPC.Draw {
         }
 
         public void WireMesh(Mesh mesh) {
-            DrawingApiDefaults<PolyDrawingApi>.WireMesh(this, mesh);
+            PolyDrawRenderer.Instance.AddWireMesh(
+                mesh,
+                Color,
+                Duration,
+                _matrix,
+                !isIdentity
+            );
+        }
+
+        public void LineBuffer(PolyDrawBuffer buffer) {
+            var copied = buffer;
+            copied.transform = isIdentity ? AffineTransform.identity : new AffineTransform(Matrix);
+            if (!Mathf.Approximately(Color.a, -1f)) copied.color = PolyDrawCommandFactory.Color(Color);
+            PolyDrawRenderer.Instance.AddLineBuffer(copied, Duration);
+        }
+
+        public void MeshBuffer(PolyDrawBuffer buffer) {
+            var copied = buffer;
+            copied.transform = isIdentity ? AffineTransform.identity : new AffineTransform(Matrix);
+            if (!Mathf.Approximately(Color.a, -1f))  copied.color = PolyDrawCommandFactory.Color(Color);
+            PolyDrawRenderer.Instance.AddMeshBuffer(copied, Duration);
         }
 
         private Matrix4x4 _matrix;
