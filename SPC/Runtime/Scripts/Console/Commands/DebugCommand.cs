@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Text;
 using Sirenix.Utilities;
@@ -19,6 +20,12 @@ namespace Spookline.SPC.Console.Commands {
         public DebugCommand() {
             Arguments(_debugDraw, _debugging);
             Subcommands(new FlagsSubcommand(), new GizmosSubcommand());
+            Subcommands(new ActionCommand("gc", "Triggers a manual garbage collection.", _ => {
+                var stopwatch = Stopwatch.StartNew();
+                GC.Collect();
+                stopwatch.Stop();
+                return CommandResult.Successful($"Garbage collection took {stopwatch.ElapsedMilliseconds}ms");
+            }));
         }
 
 
