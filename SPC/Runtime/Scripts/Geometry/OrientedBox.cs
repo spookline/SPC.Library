@@ -18,6 +18,7 @@ namespace Spookline.SPC.Geometry {
         public quaternion rotation;
 
         public float3 Size => halfExtent * 2f;
+        public float3 Extents => Size;
         public float3 Min => center - halfExtent;
         public float3 Max => center + halfExtent;
 
@@ -383,27 +384,39 @@ namespace Spookline.SPC.Geometry {
     public static class OrientedBoxExtensions {
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static VirtualTransform ToVirtualTransform(this OrientedBox box) {
-            return new VirtualTransform(box.center, box.rotation, box.Size);
+        public static TRS ToVirtualTransform(this OrientedBox box) {
+            return new TRS(box.center, box.rotation, box.Size);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static OrientedBox ToOrientedBox(this VirtualTransform transform) {
+        public static OrientedBox ToOrientedBox(this TRS transform) {
             return new OrientedBox(transform.position, transform.scale, transform.rotation);
         }
 
+
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static OrientedBox InverseTransform(this VirtualTransform transform, OrientedBox box) {
-            var boxTransform = box.ToVirtualTransform();
-            var transformed = transform.InverseTransformVirtual(boxTransform);
-            return transformed.ToOrientedBox();
+        public static AffineTransform Affine(this OrientedBox box) {
+            return new AffineTransform(box.center, box.rotation, box.Size);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static OrientedBox Transform(this VirtualTransform transform, OrientedBox box) {
-            var boxTransform = box.ToVirtualTransform();
-            var transformed = transform.TransformVirtual(boxTransform);
-            return transformed.ToOrientedBox();
+        public static OrientedBox Transform(
+            this AffineTransform transform,
+            OrientedBox box
+        ) {
+            var affine = new AffineTransform(box.center, box.rotation, box.Size);
+            affine = math.mul(transform, affine);
+            math.decompose(affine, out var pos, out var rot, out var scale);
+            return new OrientedBox(pos, scale, rot);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static OrientedBox InverseTransform(
+            this AffineTransform transform,
+            OrientedBox box
+        ) {
+            var inverse = math.inverse(transform);
+            return inverse.Transform(box);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -412,8 +425,8 @@ namespace Spookline.SPC.Geometry {
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static VirtualTransform ToGroundAlignedVirtualTransform(this OrientedBox box) {
-            return new VirtualTransform(box.LocalGroundCenter, box.rotation);
+        public static TRS ToGroundAlignedVirtualTransform(this OrientedBox box) {
+            return new TRS(box.LocalGroundCenter, box.rotation);
         }
 
         public static void DrawGizmos(this OrientedBox box, bool wireframe = true) {

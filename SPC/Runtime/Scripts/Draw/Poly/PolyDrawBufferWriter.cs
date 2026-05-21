@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace Spookline.SPC.Draw {
+namespace Spookline.SPC.Draw.Poly {
     public struct PolyDrawBufferWriter {
 
         public List<PolyDrawBuffer> buffers;

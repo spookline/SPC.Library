@@ -3,12 +3,11 @@ using System.Collections.Generic;
 using Cysharp.Threading.Tasks;
 using JetBrains.Annotations;
 using Sirenix.OdinInspector;
-using Spookline.SPC.Ext;
 using UnityEngine;
 using UnityEngine.AddressableAssets;
 using UnityEngine.ResourceManagement.AsyncOperations;
 
-namespace Spookline.SPC.Registry {
+namespace Spookline.SPC.Ext {
     public abstract class RegistryObject : SerializedScriptableObject {
 
         [HideInInspector]

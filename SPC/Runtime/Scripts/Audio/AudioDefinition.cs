@@ -1,5 +1,5 @@
 using Sirenix.OdinInspector;
-using Spookline.SPC.Registry;
+using Spookline.SPC.Ext;
 using UnityEngine;
 using UnityEngine.Audio;
 

@@ -18,7 +18,7 @@ namespace Spookline.SPC.Cleaver {
     [HideMonoScript]
     [ExecuteInEditMode]
     [AddComponentMenu("Cleaver/Section")]
-    public class CleaverSection : SpookBehaviour<CleaverSection> {
+    public class CleaverSection : SpookBehaviour<CleaverSection>, IPivotRecenter {
 
         [FormerlySerializedAs("region")]
         public CleaverProxyGroup proxyGroup;
@@ -34,23 +34,82 @@ namespace Spookline.SPC.Cleaver {
         [NonSerialized]
         public readonly List<CleaverPortal> portals = new();
 
-        public List<EditablePoint> points = new();
+        [
+            HideInPlayMode,
+            PropertySpace(20f),
+            PolymorphicDrawerSettings(ShowBaseType = false),
+            Searchable,
+            ListDrawerSettings(
+                ShowIndexLabels = true,
+                ListElementLabelName = "TypeName",
+                ShowPaging = true,
+                NumberOfItemsPerPage = 5,
+                ShowFoldout = false
+            ),
+        ]
+        public readonly List<EditablePoint> points = new();
 
-        [NonSerialized]
-        public List<CleaverPoint> runtimePoints = new();
+        [
+            NonSerialized, ShowInInspector, HideInEditorMode,
+            PropertySpace(20f),
+            Searchable,
+            PolymorphicDrawerSettings(ShowBaseType = false),
+        ]
+        public List<CleaverPoint> runtimePoints;
 
         public ulong Id { get; private set; }
 
         private void Awake() {
             Id = IdGenerator.NextId();
             On<GizmoEvt>().Do(OnGizmos);
+            On<CleaverEnvironmentRebuiltEvt>().Do(OnEnvironmentRebuild);
+        }
 
-            runtimePoints = new();
-            foreach (var point in points) {
-                var materialized = point.Materialize(
-                    new AffineTransform(transform.position, transform.rotation, transform.lossyScale)
-                );
-                runtimePoints.Add(materialized);
+        private void OnEnvironmentRebuild(ref CleaverEnvironmentRebuiltEvt args) {
+            // Just make sure we are actually registered
+            if (args.Tracks(this)) { RebuildPoints(); } else {
+                Debug.LogWarning("Section not tracked by CleaverEnvironment.", this);
+            }
+        }
+
+        private void RebuildPoints() {
+            if (runtimePoints == null) {
+                runtimePoints = new List<CleaverPoint>();
+                var affine = new AffineTransform(transform.position, transform.rotation, transform.lossyScale);
+                foreach (var point in points) {
+                    var materialized = point.Instantiate(affine);
+                    runtimePoints.Add(materialized);
+                }
+
+                foreach (var point in runtimePoints) {
+                    try {
+                        point.Initialize(this); //
+                    } catch (Exception e) {
+                        Debug.LogException(e, this); //
+                    }
+                }
+            }
+
+            for (var i = 0; i < runtimePoints.Count; i++) {
+                var currentPoint = runtimePoints[i];
+                try {
+                    currentPoint.Rebuild(this); //
+                } catch (Exception e) {
+                    Debug.LogException(e, this); //
+                }
+            }
+        }
+
+        protected override void OnDestroy() {
+            base.OnDestroy();
+            if (runtimePoints != null) {
+                foreach (var point in runtimePoints) {
+                    try {
+                        point.Dispose(); //
+                    } catch (Exception e) {
+                        Debug.LogException(e, this); //
+                    }
+                }
             }
         }
 
@@ -58,10 +117,10 @@ namespace Spookline.SPC.Cleaver {
             // Editor Gizmos
             if (args.DrawingPass(GizmoType.GizmosSelected, out var draw)) {
                 var color = Color.cyan;
-                var virtualTransform = VirtualTransform.From(transform);
+                var affine = transform.Affine();
                 using (draw.Scope(color)) {
                     foreach (var volume in volumes) {
-                        var wsBox = virtualTransform.Transform(volume);
+                        var wsBox = affine.Transform(volume);
                         draw.OrientedBox(wsBox);
                     }
                 }
@@ -69,20 +128,23 @@ namespace Spookline.SPC.Cleaver {
                 color.a = 0.1f;
                 using (draw.Scope(color)) {
                     foreach (var volume in volumes) {
-                        var wsBox = virtualTransform.Transform(volume);
+                        var wsBox = affine.Transform(volume);
                         draw.OrientedBox(wsBox, false);
                     }
                 }
 
+#if UNITY_EDITOR
                 if (points != null) {
-                    var affine = new AffineTransform(
-                        virtualTransform.position,
-                        virtualTransform.rotation,
-                        virtualTransform.scale
-                    );
+                    foreach (var point in points) {
+                        if (point == null) continue;
+                        if (!string.IsNullOrEmpty(EditablePoint.Filter)) {
+                            if (!point.TypeName.Contains(EditablePoint.Filter)) continue;
+                        }
 
-                    foreach (var point in points) { point.DrawEditor(affine, draw); }
+                        if (!point.editorHidden) point.DrawEditor(affine, draw);
+                    }
                 }
+#endif
 
                 return;
             }
@@ -136,23 +198,38 @@ namespace Spookline.SPC.Cleaver {
                 next.Add(box);
             }
 
-            var vt = VirtualTransform.From(transform);
-            volumes = next.Select(vt.InverseTransform).ToArray();
+            var vt = transform.Affine().Inverse();
+            volumes = next.Select(x => vt.Transform(x)).ToArray();
         }
+
+
+#if UNITY_EDITOR
+        [NonSerialized]
+        private PivotRecenter _pivot;
+
+        [ShowInInspector, HideInPlayMode]
+        private PivotRecenter Pivot {
+            get {
+                if (_pivot.target == null) _pivot = new PivotRecenter(this);
+                return _pivot;
+            }
+            set => _pivot = value;
+        }
+#endif
 
         public MinMaxAABB ComputeBounds() {
             if (volumes.Length == 0) return new MinMaxAABB();
-            var virtualTransform = VirtualTransform.From(transform);
-            var aabb = virtualTransform.Transform(volumes[0]).AABB();
-            for (var i = 1; i < volumes.Length; i++) aabb.Encapsulate(virtualTransform.Transform(volumes[i]).AABB());
+            var affine = transform.Affine();
+            var aabb = affine.Transform(volumes[0]).AABB();
+            for (var i = 1; i < volumes.Length; i++) aabb.Encapsulate(affine.Transform(volumes[i]).AABB());
 
             return aabb;
         }
 
         public bool Contains(float3 point, float radius) {
-            var virtualTransform = VirtualTransform.From(transform);
+            var affine = transform.Affine();
             foreach (var volume in volumes) {
-                var wsBox = virtualTransform.Transform(volume);
+                var wsBox = affine.Transform(volume);
                 if (wsBox.OverlapsSphere(point, radius)) return true;
             }
 
@@ -160,13 +237,36 @@ namespace Spookline.SPC.Cleaver {
         }
 
         public void SampleVolumes(NativeArray<CleaverVolumeData> data, int startIndex) {
-            var virtualTransform = VirtualTransform.From(transform);
+            var affine = transform.Affine();
             for (var i = 0; i < volumes.Length; i++) {
                 var volume = volumes[i];
-                var wsBox = virtualTransform.Transform(volume);
+                var wsBox = affine.Transform(volume);
                 data[startIndex + i] = new CleaverVolumeData {
                     query = wsBox
                 };
+            }
+        }
+
+        public Transform GetPivotRootTransform() {
+            return transform;
+        }
+
+        public OrientedBox GetPivotBounds() {
+            return ComputeBounds();
+        }
+
+        public void ApplyPivotDeltas(AffineTransform delta) {
+            for (var i = 0; i < points.Count; i++) {
+                var point = points[i];
+                point.position = delta.TransformPoint(point.position);
+                if (point is IRotatablePoint rotatable) rotatable.Rotation = delta.Rotate(rotatable.Rotation);
+                if (point is IScalablePoint scalable) scalable.Scale = delta.Scale(scalable.Scale);
+                if (point is IBoundingPoint bounded) bounded.Extents = delta.Scale(bounded.Extents);
+            }
+
+            for (var i = 0; i < volumes.Length; i++) {
+                var volume = volumes[i];
+                volumes[i] = delta.Transform(volume);
             }
         }
 

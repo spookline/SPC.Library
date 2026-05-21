@@ -1,10 +1,9 @@
 using System;
-using Spookline.SPC.Geometry;
 using Unity.Mathematics;
 using UnityEngine;
 
-namespace Spookline.SPC.Cleaver {
-    public static class CleaverPhysics {
+namespace Spookline.SPC.Geometry {
+    public static class Raycasts {
 
         public const int DefaultMaxResults = 512;
         private static readonly Collider[] _overlapCache = new Collider[512];

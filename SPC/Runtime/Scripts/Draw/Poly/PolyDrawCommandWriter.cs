@@ -1,6 +1,6 @@
 using Unity.Collections;
 
-namespace Spookline.SPC.Draw {
+namespace Spookline.SPC.Draw.Poly {
     /// <summary>
     /// Simple writer for adding primitive draw commands to a collection.
     /// Use PrimitiveCommandFactory to create commands with builder patterns.

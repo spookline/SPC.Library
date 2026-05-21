@@ -119,10 +119,10 @@ namespace Spookline.SPC.Cleaver {
                     return MinMaxAABB.CreateFromCenterAndExtents(float3.zero, float.MaxValue);
                 case CleaverRegionBoundsType.Proxies:
                     if (_proxies == null || _proxies.Length == 0) return aabb;
-                    var virtualTransform = VirtualTransform.From(transform);
-                    aabb = virtualTransform.Transform(_proxies[0].box).AABB();
+                    var affine = transform.Affine();
+                    aabb = affine.Transform(_proxies[0].box).AABB();
                     for (var i = 1; i < _proxies.Length; i++)
-                        aabb.Encapsulate(virtualTransform.Transform(_proxies[i].box).AABB());
+                        aabb.Encapsulate(affine.Transform(_proxies[i].box).AABB());
                     return aabb;
                 case CleaverRegionBoundsType.Fixed:
                     return MinMaxAABB.CreateFromCenterAndExtents(transform.position, boundsSize);

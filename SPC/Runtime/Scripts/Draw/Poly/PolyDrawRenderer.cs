@@ -1,17 +1,12 @@
 using System;
 using System.Collections.Generic;
 using Sirenix.OdinInspector;
-using Spookline.SPC.Debugging;
-using Spookline.SPC.Events;
 using Unity.Mathematics;
+using UnityEditor;
 using UnityEngine;
 using Object = UnityEngine.Object;
 
-#if UNITY_EDITOR
-using UnityEditor;
-#endif
-
-namespace Spookline.SPC.Draw {
+namespace Spookline.SPC.Draw.Poly {
     [ExecuteAlways]
     [DisallowMultipleComponent]
     [AddComponentMenu("")]

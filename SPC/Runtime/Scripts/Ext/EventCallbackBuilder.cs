@@ -40,7 +40,7 @@ namespace Spookline.SPC.Ext {
             return With(EvtInterceptors.ActiveAndEnabled<T>(component));
         }
 
-        public HandlerRegistration<T> Do(EventHandler<T> action, int priority = 0, string debugName = null) {
+        public HandlerRegistration<T> Do(Events.EventHandler<T> action, int priority = 0, string debugName = null) {
 #if DEBUG
             if (debugName == null) {
                 var clazz = _container.GetType().FullName;
@@ -89,7 +89,7 @@ namespace Spookline.SPC.Ext {
             return registration;
         }
 
-        public HandlerRegistration<T> DoOnce(EventHandler<T> action, int priority = 0, string debugName = null) {
+        public HandlerRegistration<T> DoOnce(Events.EventHandler<T> action, int priority = 0, string debugName = null) {
 #if DEBUG
             if (debugName == null) {
                 var clazz = _container.GetType().FullName;

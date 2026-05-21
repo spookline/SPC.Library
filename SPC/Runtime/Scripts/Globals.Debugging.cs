@@ -5,6 +5,7 @@ using Dahomey.Cbor.ObjectModel;
 using Sirenix.OdinInspector;
 using Spookline.SPC.Debugging;
 using Spookline.SPC.Draw;
+using Spookline.SPC.Draw.Poly;
 using Spookline.SPC.Events;
 using Spookline.SPC.Geometry;
 using Spookline.SPC.Save;

@@ -1,7 +1,7 @@
 using Unity.Mathematics;
 using UnityEngine;
 
-namespace Spookline.SPC.Draw {
+namespace Spookline.SPC.Draw.Poly {
     /// <summary>
     /// Factory for creating primitive draw commands with various builder overloads.
     /// Encapsulates all the complex geometry building logic.

@@ -5,6 +5,7 @@ using System.Linq;
 using Sirenix.OdinInspector;
 using Spookline.SPC.Debugging;
 using Spookline.SPC.Draw;
+using Spookline.SPC.Draw.Poly;
 using Spookline.SPC.Events;
 using Spookline.SPC.Ext;
 using Unity.AI.Navigation;
@@ -147,7 +148,7 @@ namespace Spookline.SPC.Cleaver {
             }
 
             if (args.DrawingPass(out var draw)) {
-                using(draw.Scope(PolyDrawBuffer.KeepColor)) draw.MeshBuffer(drawBuffer);
+                using (draw.Scope(PolyDrawBuffer.KeepColor)) draw.MeshBuffer(drawBuffer);
             }
         }
 
@@ -245,6 +246,40 @@ namespace Spookline.SPC.Cleaver {
             DiscardBakedData();
         }
 
+        private CleaverProxyGroup[] DiscoverProxyGroups() {
+            return FindObjectsByType<CleaverProxyGroup>(FindObjectsInactive.Exclude)
+                .Where(FilterValidId)
+                .ToArray();
+
+            bool FilterValidId(CleaverProxyGroup group) {
+                if (group.Id != 0) return true;
+                Debug.LogWarning($"Skipping group with default ID: {group.name}", group);
+                return false;
+            }
+        }
+
+        private CleaverSection[] DiscoverSections() {
+            return FindObjectsByType<CleaverSection>(FindObjectsInactive.Exclude)
+                .Where(FilterValidId)
+                .ToArray();
+
+            bool FilterValidId(CleaverSection section) {
+                if (section.Id != 0) return true;
+                Debug.LogWarning($"Skipping section with default ID: {section.name}", section);
+                return false;
+            }
+        }
+
+        public CleaverPortal[] DiscoverPortals() {
+            return FindObjectsByType<CleaverPortal>(FindObjectsInactive.Exclude)
+                .Where(FilterValidId)
+                .ToArray();
+
+            bool FilterValidId(CleaverPortal portal) {
+                return true; // Portals can have default IDs since they are tracked by their from/to sections
+            }
+        }
+
         [Button]
         public void Rebuild() {
             AllocateIfNeeded();
@@ -252,7 +287,7 @@ namespace Spookline.SPC.Cleaver {
 
             var stopwatch = Stopwatch.StartNew();
             try {
-                var groupObjects = FindObjectsByType<CleaverProxyGroup>(FindObjectsInactive.Exclude);
+                var groupObjects = DiscoverProxyGroups();
                 var proxyCount = groupObjects.Sum(region => region.GetProxyCount());
                 var proxyPointCount = groupObjects.Sum(region => region.GetProxySamplePointCount());
                 proxyGroups = new NativeArray<CleaverProxyGroupData>(groupObjects.Length, Allocator.Persistent);
@@ -296,7 +331,7 @@ namespace Spookline.SPC.Cleaver {
                     proxyGroups[i] = data;
                 }
 
-                var sectionObjects = FindObjectsByType<CleaverSection>(FindObjectsInactive.Exclude);
+                var sectionObjects = DiscoverSections();
                 var volumeCount = sectionObjects.Sum(section => section.volumes.Length);
                 sections = new NativeArray<CleaverSectionData>(sectionObjects.Length, Allocator.Persistent);
                 volumes = new NativeArray<CleaverVolumeData>(volumeCount, Allocator.Persistent);
@@ -320,7 +355,7 @@ namespace Spookline.SPC.Cleaver {
                     volumeIndex += section.volumes.Length;
                 }
 
-                var portalObjects = FindObjectsByType<CleaverPortal>(FindObjectsInactive.Exclude);
+                var portalObjects = DiscoverPortals();
                 foreach (var portal in portalObjects) {
                     portal.from?.portals.Add(portal);
                     portal.to?.portals.Add(portal);
@@ -464,8 +499,16 @@ namespace Spookline.SPC.Cleaver {
 
         public CleaverEnvironment environment;
 
-    }
+        public bool Tracks(CleaverSection section) {
+            if (!section || section.Id == 0) return false;
+            return environment.sectionLookup.ContainsKey(section.Id);
+        }
 
+        public bool Tracks(CleaverProxyGroup group) {
+            if (!group || group.Id == 0) return false;
+            return environment.groupLookup.ContainsKey(group.Id);
+        }
+    }
 
     public struct CleaverCheckForUpdateEvt : Evt<CleaverCheckForUpdateEvt> {
 

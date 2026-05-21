@@ -1,3 +1,6 @@
+using HELIX.Coloring;
+using Sirenix.OdinInspector;
+using Sirenix.OdinInspector.Editor;
 using Spookline.SPC.Geometry;
 using Unity.Mathematics;
 using UnityEditor;
@@ -12,8 +15,14 @@ namespace Spookline.SPC.Cleaver.Editor {
 
         private readonly BoxBoundsHandle _boundsHandle = new();
 
-        public override GUIContent toolbarIcon =>
-            new(EditorGUIUtility.IconContent("EditCollider").image, "Edit Cleaver Section Volumes");
+        public override GUIContent toolbarIcon {
+            get {
+                return new GUIContent(
+                    SdfIcons.CreateTransparentIconTexture(SdfIconType.BoundingBoxCircles, Colors.Hex("#ffb13d"), 64, 64, 0),
+                    "Edit Cleaver Volumes"
+                );
+            }
+        }
 
 
         public override void OnToolGUI(EditorWindow window) {
@@ -22,7 +31,7 @@ namespace Spookline.SPC.Cleaver.Editor {
                 : null;
             if (section == null || section.volumes == null) return;
 
-            var vt = VirtualTransform.From(section.transform);
+            var vt = section.transform.Affine();
             var selectedIndex = CleaverSectionOverlayState.GetLastEditedIndex(section);
             var selectedIndices = CleaverSectionOverlayState.GetSelectedIndices(section);
 

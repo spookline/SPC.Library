@@ -1,6 +1,6 @@
 using System;
 using System.Threading;
-using Spookline.SPC.Registry;
+using Spookline.SPC.Ext;
 
 namespace Spookline.SPC.Audio {
     public class SpookAudioRegistry : ObjectRegistry<SpookAudioRegistry, AudioDefinition> {

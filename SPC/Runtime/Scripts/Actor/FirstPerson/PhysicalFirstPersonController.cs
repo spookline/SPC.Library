@@ -1,8 +1,8 @@
 ﻿using Sirenix.OdinInspector;
 using Spookline.SPC.Actor.Attachments;
+using Spookline.SPC.Common;
 using Spookline.SPC.Events;
 using Spookline.SPC.Ext;
-using Spookline.SPC.Input;
 using Unity.Cinemachine;
 using UnityEngine;
 using UnityEngine.InputSystem;

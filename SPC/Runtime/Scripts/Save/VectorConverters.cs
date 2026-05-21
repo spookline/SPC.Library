@@ -1,7 +1,6 @@
 using System;
-using System.Runtime.Serialization;
 using Dahomey.Cbor.ObjectModel;
-using JetBrains.Annotations;
+using Spookline.SPC.Geometry;
 using Unity.Mathematics;
 using UnityEngine;
 
@@ -32,20 +31,18 @@ namespace Spookline.SPC.Save {
             return new CborArray(quaternion.x, quaternion.y, quaternion.z, quaternion.w);
         }
 
-        public static CborValue ToCbor(this AffineTransform transform) {
-            math.decompose(transform, out var scale, out var rotationValue, out var translation);
-            var rotation = rotationValue.value;
+        public static CborValue ToCbor(this TRS trs) {
             return new CborArray(
-                translation.x,
-                translation.y,
-                translation.z,
-                rotation.x,
-                rotation.y,
-                rotation.z,
-                rotation.w,
-                scale.x,
-                scale.y,
-                scale.z
+                trs.position.x,
+                trs.position.y,
+                trs.position.z,
+                trs.rotation.x,
+                trs.rotation.y,
+                trs.rotation.z,
+                trs.rotation.w,
+                trs.scale.x,
+                trs.scale.y,
+                trs.scale.z
             );
         }
 
@@ -63,8 +60,8 @@ namespace Spookline.SPC.Save {
             );
         }
 
-        public static bool TryAffineTransform(this CborValue value, out AffineTransform result) {
-            result = Unity.Mathematics.AffineTransform.identity;
+        public static bool TryTRS(this CborValue value, out TRS result) {
+            result = Geometry.TRS.Identity;
             if (value.TryGetArray(out var array, 12)) {
                 if (!array[0].TryFloat(out var tx)) return false;
                 if (!array[1].TryFloat(out var ty)) return false;
@@ -77,10 +74,10 @@ namespace Spookline.SPC.Save {
                 if (!array[8].TryFloat(out var sy)) return false;
                 if (!array[9].TryFloat(out var sz)) return false;
 
-                result = new AffineTransform(
-                    new float3(tx, ty, tz),
-                    new quaternion(rx, ry, rz, rw),
-                    new float3(sx, sy, sz)
+                result = new TRS(
+                    new Vector3(tx, ty, tz),
+                    new Quaternion(rx, ry, rz, rw),
+                    new Vector3(sx, sy, sz)
                 );
                 return true;
             }
@@ -88,8 +85,8 @@ namespace Spookline.SPC.Save {
             return false;
         }
 
-        public static AffineTransform AffineTransform(this CborValue value) {
-            if (value.TryAffineTransform(out var result)) return result;
+        public static TRS TRS(this CborValue value) {
+            if (value.TryTRS(out var result)) return result;
             throw new InvalidCborException<AffineTransform>(value);
         }
 

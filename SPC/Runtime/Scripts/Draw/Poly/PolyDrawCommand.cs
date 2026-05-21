@@ -4,7 +4,7 @@ using Unity.Collections;
 using Unity.Mathematics;
 using UnityEngine;
 
-namespace Spookline.SPC.Draw {
+namespace Spookline.SPC.Draw.Poly {
     [StructLayout(LayoutKind.Sequential)]
     public struct PolyDrawCommand {
 

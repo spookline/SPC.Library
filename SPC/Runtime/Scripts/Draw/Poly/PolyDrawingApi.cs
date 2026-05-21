@@ -2,7 +2,7 @@ using System;
 using Unity.Mathematics;
 using UnityEngine;
 
-namespace Spookline.SPC.Draw {
+namespace Spookline.SPC.Draw.Poly {
     public class PolyDrawingApi : IDrawingAPI, IDisposable {
 
         public void Line(Vector3 a, Vector3 b) {

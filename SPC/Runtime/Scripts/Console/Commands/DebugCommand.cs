@@ -6,6 +6,7 @@ using System.Text;
 using Sirenix.Utilities;
 using Spookline.SPC.Common;
 using Spookline.SPC.Draw;
+using Spookline.SPC.Draw.Poly;
 
 namespace Spookline.SPC.Console.Commands {
     public class DebugCommand : Command {

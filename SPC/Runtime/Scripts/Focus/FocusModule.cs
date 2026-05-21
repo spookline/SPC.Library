@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using Sirenix.Serialization;
+using Spookline.SPC.Common;
 using Spookline.SPC.Ext;
-using Spookline.SPC.Input;
 using UnityEngine;
 using UnityEngine.InputSystem;
 

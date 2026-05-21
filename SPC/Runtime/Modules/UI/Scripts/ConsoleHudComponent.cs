@@ -5,9 +5,9 @@ using HELIX.Widgets;
 using HELIX.Widgets.Modifiers;
 using HELIX.Widgets.Universal;
 using HELIX.Widgets.Utilities;
+using Spookline.SPC.Common;
 using Spookline.SPC.Ext;
 using Spookline.SPC.Focus;
-using Spookline.SPC.Input;
 using UnityEngine;
 using UnityEngine.InputSystem;
 

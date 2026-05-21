@@ -2,7 +2,7 @@ using System;
 using Spookline.SPC.Ext;
 using UnityEngine.InputSystem;
 
-namespace Spookline.SPC.Input {
+namespace Spookline.SPC.Common {
     public static class InputSystemExtensions {
 
         public static void PerformedInput(this ISpookBehaviour behaviour, InputActionReference reference,

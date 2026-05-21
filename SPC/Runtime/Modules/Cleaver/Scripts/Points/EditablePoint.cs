@@ -1,11 +1,15 @@
 using System;
 using System.Collections.Generic;
+using Cysharp.Threading.Tasks;
+using Sirenix.OdinInspector;
 using Sirenix.Serialization;
 using Spookline.SPC.Debugging;
 using Spookline.SPC.Draw;
 using Spookline.SPC.Geometry;
 using Unity.Mathematics;
 using UnityEngine;
+using UnityEngine.AddressableAssets;
+using Object = UnityEngine.Object;
 
 #if UNITY_EDITOR
 using UnityEditor;
@@ -16,28 +20,68 @@ namespace Spookline.SPC.Cleaver.Points {
     [Serializable]
     public abstract class EditablePoint {
 
+        public static string Filter;
+        public static readonly EditablePointGuiFactory Gui = new();
+        public static readonly EditablePointHandleFactory Handles = new();
         public static CleaverSection CurrentSection;
 
         [OdinSerialize]
         public Vector3 position;
 
 #if UNITY_EDITOR
+        public static Dictionary<string, MeshFilter[]> EditorMeshCache = new();
+
         [NonSerialized]
         public Dictionary<string, object> editorData = new();
+        [NonSerialized]
+        public bool editorHidden = false;
 #endif
 
         public abstract void DrawEditor(AffineTransform transform, IDrawingAPI draw);
 
         public abstract void DrawHandles(AffineTransform transform);
-        public abstract CleaverPoint Materialize(AffineTransform transform);
+        public abstract CleaverPoint Instantiate(AffineTransform transform);
 
-        public abstract EditablePoint Clone();
+        public virtual EditablePoint Clone() {
+            var point = (EditablePoint)MemberwiseClone();
+            point.CopyFrom(this);
+            return point;
+        }
+
         public abstract void CopyFrom(EditablePoint other);
-        public virtual string TypeName => "Point";
+        public virtual string TypeName => GetType().Name;
 
         public virtual void DrawOverlayGUI() { }
 
+        protected static void DrawAddressableMesh<T>(IDrawingAPI draw, AssetReferenceT<T> reference)
+            where T : Object {
+            if (reference == null) return;
+#if UNITY_EDITOR
+            if (Application.isPlaying) return;
+            var path = AssetDatabase.GUIDToAssetPath(reference.AssetGUID);
+            if (!EditorMeshCache.TryGetValue(path, out var meshFilters)) {
+                var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+                if (!prefab) return;
+                meshFilters = prefab.GetComponentsInChildren<MeshFilter>();
+                EditorMeshCache[path] = meshFilters;
+            }
+
+            foreach (var meshFilter in meshFilters) {
+                var transform = float4x4.TRS(
+                    meshFilter.transform.position,
+                    meshFilter.transform.rotation,
+                    meshFilter.transform.lossyScale
+                );
+                using (draw.ScopeTransformation(transform)) { draw.Mesh(meshFilter.sharedMesh); }
+            }
+#endif
+        }
+
     }
+
+    public class EditablePointHandleFactory { }
+
+    public class EditablePointGuiFactory { }
 
     public interface IRotatablePoint {
 
@@ -57,14 +101,21 @@ namespace Spookline.SPC.Cleaver.Points {
 
     }
 
-    public abstract class CleaverPoint {
+    public abstract class CleaverPoint : IDisposable {
 
         public virtual void Gizmos(ref GizmoEvt evt) { }
+
+        public virtual void Initialize(CleaverSection section) { }
+
+        public virtual void Rebuild(CleaverSection section) { }
+
+        public virtual void Dispose() { }
 
     }
 
     public abstract class CleaverPoint<T> : CleaverPoint where T : EditablePoint {
 
+        [HideLabel]
         public T source;
 
         protected CleaverPoint() { }
@@ -75,10 +126,9 @@ namespace Spookline.SPC.Cleaver.Points {
 
     }
 
+    public static class DefaultHandleFactoryExtensions {
 
-    public static class DefaultHandleDrawers {
-
-        public static void Position(AffineTransform transform, EditablePoint point) {
+        public static void Position(this EditablePointHandleFactory _, AffineTransform transform, EditablePoint point) {
 #if UNITY_EDITOR
             using (new Handles.DrawingScope((float4x4)transform)) {
                 var next = Handles.PositionHandle(point.position, Quaternion.identity);
@@ -87,7 +137,7 @@ namespace Spookline.SPC.Cleaver.Points {
 #endif
         }
 
-        public static void Transform<T>(AffineTransform transform, T point)
+        public static void Transform<T>(this EditablePointHandleFactory _, AffineTransform transform, T point)
             where T : EditablePoint, IRotatablePoint {
 #if UNITY_EDITOR
             using (new Handles.DrawingScope((float4x4)transform)) {
@@ -100,7 +150,7 @@ namespace Spookline.SPC.Cleaver.Points {
 #endif
         }
 
-        public static void TransformScale<T>(AffineTransform transform, T point)
+        public static void TransformScale<T>(this EditablePointHandleFactory _, AffineTransform transform, T point)
             where T : EditablePoint, IRotatablePoint, IScalablePoint {
 #if UNITY_EDITOR
             using (new Handles.DrawingScope((float4x4)transform)) {
@@ -115,7 +165,12 @@ namespace Spookline.SPC.Cleaver.Points {
 #endif
         }
 
-        public static void Position(AffineTransform transform, EditablePoint point, Quaternion rotation) {
+        public static void Position(
+            this EditablePointHandleFactory _,
+            AffineTransform transform,
+            EditablePoint point,
+            Quaternion rotation
+        ) {
 #if UNITY_EDITOR
             using (new Handles.DrawingScope((float4x4)transform)) {
                 var next = Handles.PositionHandle(point.position, rotation);
@@ -124,7 +179,7 @@ namespace Spookline.SPC.Cleaver.Points {
 #endif
         }
 
-        public static void Rotation<T>(AffineTransform transform, T point)
+        public static void Rotation<T>(this EditablePointHandleFactory _, AffineTransform transform, T point)
             where T : EditablePoint, IRotatablePoint {
 #if UNITY_EDITOR
             using (new Handles.DrawingScope((float4x4)transform)) {
@@ -134,7 +189,7 @@ namespace Spookline.SPC.Cleaver.Points {
 #endif
         }
 
-        public static void Scale<T>(AffineTransform transform, T point)
+        public static void Scale<T>(this EditablePointHandleFactory _, AffineTransform transform, T point)
             where T : EditablePoint, IScalablePoint {
 #if UNITY_EDITOR
             using (new Handles.DrawingScope((float4x4)transform)) {
@@ -144,7 +199,12 @@ namespace Spookline.SPC.Cleaver.Points {
 #endif
         }
 
-        public static void Scale<T>(AffineTransform transform, T point, Quaternion rotation)
+        public static void Scale<T>(
+            this EditablePointHandleFactory _,
+            AffineTransform transform,
+            T point,
+            Quaternion rotation
+        )
             where T : EditablePoint, IScalablePoint {
 #if UNITY_EDITOR
             using (new Handles.DrawingScope((float4x4)transform)) {
@@ -154,7 +214,7 @@ namespace Spookline.SPC.Cleaver.Points {
 #endif
         }
 
-        public static void BoundingBox<T>(AffineTransform transform, T point)
+        public static void BoundingBox<T>(this EditablePointHandleFactory _, AffineTransform transform, T point)
             where T : EditablePoint, IBoundingPoint, IRotatablePoint {
 #if UNITY_EDITOR
             const string handleKey = "boundsHandle";
@@ -190,6 +250,29 @@ namespace Spookline.SPC.Cleaver.Points {
         }
 
     }
+
+    public static class DefaultGuiFactoryExtensions {
+
+        public static Vector3 Vector3(this EditablePointGuiFactory _, string label, Vector3 value, float width = 60f) {
+#if UNITY_EDITOR
+            EditorGUILayout.BeginHorizontal();
+            EditorGUILayout.LabelField(label, GUILayout.Width(width));
+            var result = EditorGUILayout.Vector3Field(GUIContent.none, value);
+            EditorGUILayout.EndHorizontal();
+            return result;
+#endif
+            return value;
+        }
+
+        public static float Float(this EditablePointGuiFactory _, string label, float value) {
+#if UNITY_EDITOR
+            return EditorGUILayout.FloatField(label, value);
+#endif
+            return value;
+        }
+
+    }
+
 
     public class OrientedBoxPoint : CleaverPoint<EditableOrientedBoxPoint> {
 
@@ -237,11 +320,11 @@ namespace Spookline.SPC.Cleaver.Points {
         }
 
         public override void DrawHandles(AffineTransform transform) {
-            DefaultHandleDrawers.Transform(transform, this);
-            DefaultHandleDrawers.BoundingBox(transform, this);
+            Handles.Transform(transform, this);
+            Handles.BoundingBox(transform, this);
         }
 
-        public override CleaverPoint Materialize(AffineTransform transform) {
+        public override CleaverPoint Instantiate(AffineTransform transform) {
             math.decompose(transform, out _, out var rotation, out var scale);
             var p = math.transform(transform, position);
             var r = rotation * Rotation;
@@ -267,9 +350,9 @@ namespace Spookline.SPC.Cleaver.Points {
 
         public override void DrawOverlayGUI() {
 #if UNITY_EDITOR
-            position = EditorGUILayout.Vector3Field("Position", position);
-            _rotation = Quaternion.Euler(EditorGUILayout.Vector3Field("Rotation", Rotation.eulerAngles));
-            _extents = EditorGUILayout.Vector3Field("Extents", Extents);
+            position = Gui.Vector3("Position", position);
+            Rotation = Quaternion.Euler(Gui.Vector3("Rotation", Rotation.eulerAngles));
+            Extents = Gui.Vector3("Extents", Extents);
 #endif
         }
 
@@ -318,10 +401,10 @@ namespace Spookline.SPC.Cleaver.Points {
         }
 
         public override void DrawHandles(AffineTransform transform) {
-            DefaultHandleDrawers.TransformScale(transform, this);
+            Handles.TransformScale(transform, this);
         }
 
-        public override CleaverPoint Materialize(AffineTransform transform) {
+        public override CleaverPoint Instantiate(AffineTransform transform) {
             var localTransform = new AffineTransform(position, Rotation, Scale);
             var worldTransform = math.mul(transform, localTransform);
             return new TransformPoint(this, worldTransform);
@@ -345,11 +428,96 @@ namespace Spookline.SPC.Cleaver.Points {
 
 
         public override void DrawOverlayGUI() {
-#if UNITY_EDITOR
-            position = EditorGUILayout.Vector3Field("Position", position);
-            Rotation = Quaternion.Euler(EditorGUILayout.Vector3Field("Rotation", Rotation.eulerAngles));
-            Scale = EditorGUILayout.Vector3Field("Scale", Scale);
-#endif
+            position = Gui.Vector3("Position", position);
+            Rotation = Quaternion.Euler(Gui.Vector3("Rotation", Rotation.eulerAngles));
+            Scale = Gui.Vector3("Scale", Scale);
+        }
+
+    }
+
+
+    public class DeferredSpawnPoint : CleaverPoint<DeferredSpawnPoint.Authoring> {
+
+        public const string Name = "Deferred Spawn";
+
+        [Serializable, TypeRegistryItem(Name)]
+        public class Authoring : EditableTransformPoint {
+
+            [OdinSerialize]
+            public AssetReferenceGameObject prefab;
+
+            public override string TypeName => Name;
+
+            public override EditablePoint Clone() {
+                return new Authoring {
+                    position = position,
+                    Rotation = Rotation,
+                    Scale = Scale,
+                    prefab = prefab
+                };
+            }
+
+            public override void CopyFrom(EditablePoint other) {
+                if (other is not Authoring o) return;
+                position = o.position;
+                Rotation = o.Rotation;
+                Scale = o.Scale;
+                prefab = o.prefab;
+            }
+
+            public override void DrawEditor(AffineTransform transform, IDrawingAPI draw) {
+                base.DrawEditor(transform, draw);
+
+                var localTransform = new AffineTransform(position, Rotation, Scale);
+                var worldTransform = math.mul(transform, localTransform);
+                using (draw.Scope(Color.red, (float4x4)worldTransform)) { DrawAddressableMesh(draw, prefab); }
+            }
+
+            public override CleaverPoint Instantiate(AffineTransform transform) {
+                var localTransform = new AffineTransform(position, Rotation, Scale);
+                var worldTransform = math.mul(transform, localTransform);
+                return new DeferredSpawnPoint(this, worldTransform, prefab);
+            }
+        }
+
+        public AffineTransform Transform { get; }
+        public AssetReferenceGameObject Prefab { get; }
+
+        public GameObject SpawnedObject { get; private set; }
+
+        public DeferredSpawnPoint(
+            Authoring source,
+            AffineTransform transform,
+            AssetReferenceGameObject prefab
+        ) : base(source) {
+            Transform = transform;
+            Prefab = prefab;
+        }
+
+        public override void Gizmos(ref GizmoEvt evt) {
+            if (evt.DrawingPass(out var draw)) {
+                var pos = math.transform(Transform, Vector3.zero);
+                draw.Sphere(pos, 0.25f);
+            }
+        }
+
+        public override void Initialize(CleaverSection section) {
+            Load().Forget();
+        }
+
+        public async UniTaskVoid Load() {
+            math.decompose(Transform, out var pos, out var rot, out var scale);
+            var obj = await Addressables.InstantiateAsync(Prefab);
+            obj.transform.localScale = scale;
+            obj.transform.localPosition = pos;
+            obj.transform.localRotation = rot;
+            obj.hideFlags = HideFlags.DontSave;
+            SpawnedObject = obj;
+        }
+
+        public override void Dispose() {
+            base.Dispose();
+            if (SpawnedObject) Addressables.ReleaseInstance(SpawnedObject);
         }
 
     }

@@ -3,7 +3,7 @@ using Sirenix.Serialization;
 using Spookline.SPC.Ext;
 using UnityEngine;
 
-namespace Spookline.SPC.Scripts.Cameras {
+namespace Spookline.SPC.Cameras {
     public class FovManager : SpookManagerBehaviour<FovManager> {
 
         [SerializeField]

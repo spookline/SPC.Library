@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace Spookline.SPC.Scripts.Cameras
+namespace Spookline.SPC.Cameras
 {
     [Serializable]
     public class UnityCameraProvider : FovManager.ICameraProvider {

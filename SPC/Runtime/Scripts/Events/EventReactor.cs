@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
-using Spookline.SPC.Events;
 using Spookline.SPC.Ext;
 using UnityEngine;
 
@@ -398,52 +397,52 @@ namespace Spookline.SPC.Events {
         }
 
     }
-}
 
-public interface IEventHandler<T> {
+    public interface IEventHandler<T> {
 
-    public void Handle(T arg);
-    public void HandleRef(ref T arg);
-
-}
-
-public delegate void EventHandler<T>(ref T args) where T : Evt<T>;
-
-public delegate void ConsumerEventHandler<in T>(T args) where T : Evt<T>;
-
-public delegate bool StreamEventHandler<T>(ref T args) where T : Evt<T>;
-
-public interface IEventReactor {
-
-    Type TypeDelegate();
-    void RaiseUnsafe(ref object obj);
-    object SubscribeUnsafe(object obj, MethodInfo info, int priority = 0);
-    void UnsubscribeUnsafe(object subscription);
-    string ResolveDebugName(object subscription);
-    EventReactorInfo CreateInfo();
-
-}
-
-public class EventReactorInfo {
-
-    public string Name { get; set; }
-    public Type Type { get; set; }
-    public List<PriorityRow> Rows { get; set; } = new();
-
-    public static string GetDebugName(Delegate handler) {
-        try {
-            var method = handler.Method;
-            var declaringType = method.DeclaringType;
-            var name = method.Name;
-            return $"{declaringType?.Name ?? "@"}.{name}";
-        } catch (MissingMemberException) { return "Private Method"; }
-    }
-
-    public class PriorityRow {
-
-        public int Priority { get; set; }
-        public List<string> Handlers { get; set; } = new();
+        public void Handle(T arg);
+        public void HandleRef(ref T arg);
 
     }
 
+    public delegate void EventHandler<T>(ref T args) where T : Evt<T>;
+
+    public delegate void ConsumerEventHandler<in T>(T args) where T : Evt<T>;
+
+    public delegate bool StreamEventHandler<T>(ref T args) where T : Evt<T>;
+
+    public interface IEventReactor {
+
+        Type TypeDelegate();
+        void RaiseUnsafe(ref object obj);
+        object SubscribeUnsafe(object obj, MethodInfo info, int priority = 0);
+        void UnsubscribeUnsafe(object subscription);
+        string ResolveDebugName(object subscription);
+        EventReactorInfo CreateInfo();
+
+    }
+
+    public class EventReactorInfo {
+
+        public string Name { get; set; }
+        public Type Type { get; set; }
+        public List<PriorityRow> Rows { get; set; } = new();
+
+        public static string GetDebugName(Delegate handler) {
+            try {
+                var method = handler.Method;
+                var declaringType = method.DeclaringType;
+                var name = method.Name;
+                return $"{declaringType?.Name ?? "@"}.{name}";
+            } catch (MissingMemberException) { return "Private Method"; }
+        }
+
+        public class PriorityRow {
+
+            public int Priority { get; set; }
+            public List<string> Handlers { get; set; } = new();
+
+        }
+
+    }
 }

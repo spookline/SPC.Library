@@ -3,7 +3,7 @@ using Unity.Collections;
 using Unity.Mathematics;
 using UnityEngine;
 
-namespace Spookline.SPC.Draw {
+namespace Spookline.SPC.Draw.Poly {
     public struct PolyDrawLineWriter {
 
         private NativeList<PolyDrawVertex> _vertices;

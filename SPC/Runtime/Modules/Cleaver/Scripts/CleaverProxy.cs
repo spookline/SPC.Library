@@ -51,7 +51,7 @@ namespace Spookline.SPC.Cleaver {
             var boundsColor = Color.magenta;
             boundsColor.a = 0.1f;
             Gizmos.color = boundsColor;
-            var wsBox = VirtualTransform.From(transform).Transform(box);
+            var wsBox = transform.Affine().Transform(box);
             wsBox = wsBox.Grow(0.0001f);
             wsBox.DrawGizmos(false);
 
@@ -64,20 +64,20 @@ namespace Spookline.SPC.Cleaver {
         [Button("From Renderers")]
         public void FromAllRenderers() {
             OrientedBox boundsWs = BoundsHelper.ComputeBounds(GetComponentsInChildren<Renderer>());
-            box = VirtualTransform.From(transform).InverseTransform(boundsWs);
+            box = transform.Affine().InverseTransform(boundsWs);
         }
 
         [Button("From Colliders")]
         public void FromAllColliders() {
             OrientedBox boundsWs = BoundsHelper.ComputeBounds(GetComponentsInChildren<Collider>());
-            box = VirtualTransform.From(transform).InverseTransform(boundsWs);
+            box = transform.Affine().InverseTransform(boundsWs);
         }
 
         [Button]
         public void FromRenderer(Renderer target) {
             target ??= GetComponentInChildren<Renderer>();
             var wsBox = target.ToOrientedBox();
-            box = VirtualTransform.From(transform).InverseTransform(wsBox);
+            box = transform.Affine().InverseTransform(wsBox);
         }
 
         [Button]
@@ -90,12 +90,12 @@ namespace Spookline.SPC.Cleaver {
         }
 
         public void SamplePoints(NativeArray<float3> points, int startIndex) {
-            var wsBox = VirtualTransform.From(transform).Transform(box);
+            var wsBox = transform.Affine().Transform(box);
             sampler?.SamplePoints(wsBox, points, startIndex);
         }
 
         public CleaverProxyData InitializeProxyData() {
-            var wsBox = VirtualTransform.From(transform).Transform(box);
+            var wsBox = transform.Affine().Transform(box);
             return new CleaverProxyData {
                 radius = radius,
                 query = wsBox.Grow(radius),

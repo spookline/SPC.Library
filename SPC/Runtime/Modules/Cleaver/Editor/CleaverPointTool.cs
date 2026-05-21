@@ -1,4 +1,7 @@
 using System.Collections.Generic;
+using HELIX.Coloring;
+using Sirenix.OdinInspector;
+using Sirenix.OdinInspector.Editor;
 using Spookline.SPC.Cleaver.Points;
 using Spookline.SPC.Draw;
 using Spookline.SPC.Geometry;
@@ -16,16 +19,24 @@ namespace Spookline.SPC.Cleaver.Editor {
     )]
     public sealed class CleaverPointTool : EditorTool {
 
-        public static int SelectedPointIndex { get; private set; } = -1;
+        public static int SelectedPointIndex {
+            get => _selectedPointIndex;
+            set => _selectedPointIndex = value;
+        }
 
         [SerializeField]
-        private int _selectedPointIndex = -1;
+        private static int _selectedPointIndex = -1;
 
-        public override GUIContent toolbarIcon =>
-            new(EditorGUIUtility.IconContent("d_PreMatSphere").image, "Edit Cleaver Points");
+        public override GUIContent toolbarIcon {
+            get {
+                return new GUIContent(
+                    SdfIcons.CreateTransparentIconTexture(SdfIconType.Record2, Colors.Hex("#ffb13d"), 64, 64, 0),
+                    "Edit Cleaver Points"
+                );
+            }
+        }
 
         public override void OnToolGUI(EditorWindow window) {
-            SelectedPointIndex = _selectedPointIndex;
             var section = Selection.activeTransform
                 ? Selection.activeTransform.GetComponentInParent<CleaverSection>()
                 : null;
@@ -34,29 +45,32 @@ namespace Spookline.SPC.Cleaver.Editor {
             var sceneView = window as SceneView;
             if (sceneView == null) return;
 
-            var virtualTransform = VirtualTransform.From(section.transform);
-            var affine = new AffineTransform(
-                virtualTransform.position,
-                virtualTransform.rotation,
-                virtualTransform.scale
-            );
+            var affine = section.transform.Affine();
 
             // Perform selection
             for (var i = 0; i < section.points.Count; i++) {
                 var point = section.points[i];
-                if (DrawPointLabel(affine, point, i, i == _selectedPointIndex)) {
-                    Undo.IncrementCurrentGroup();
-                    Undo.SetCurrentGroupName($"Select Cleaver Point {i}");
-                    Undo.RecordObject(this, $"Select Cleaver Point {i}");
+                if (point == null) continue;
+
+                if (!string.IsNullOrEmpty(EditablePoint.Filter)) {
+                    if (!point.TypeName.Contains(EditablePoint.Filter)) continue;
+                }
+
+                var isSelected = i == _selectedPointIndex;
+                if (!isSelected && CleaverPointOverlay.HideNonSelected) {
+                    point.editorHidden = true;
+                    continue;
+                }
+                point.editorHidden = false;
+
+                if (DrawPointLabel(affine, point, i, isSelected)) {
                     _selectedPointIndex = i;
-                    SelectedPointIndex = i;
-                    Undo.FlushUndoRecordObjects();
                     break;
                 }
             }
 
             // Draw all points
-            for (var i = 0; i < section.points.Count; i++) {
+            if (!CleaverPointOverlay.HideHandles) for (var i = 0; i < section.points.Count; i++) {
                 var point = section.points[i];
                 if (i == _selectedPointIndex) { DrawPointHandles(section, affine, point); }
             }
