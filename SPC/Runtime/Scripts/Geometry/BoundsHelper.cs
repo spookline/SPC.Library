@@ -87,7 +87,8 @@ namespace Spookline.SPC.Geometry {
         }
 
         public static OrientedBox ComputeFor(Transform pivot, List<IBoundsContributor> contributors) {
-            if (contributors == null || contributors.Count == 0) return new OrientedBox(pivot.position, float3.zero, pivot.rotation);
+            if (contributors == null || contributors.Count == 0)
+                return new OrientedBox(pivot.position, float3.zero, pivot.rotation);
 
             var firstPass = ComputeFor(contributors);
             var firstPassLength = math.length(firstPass.halfExtent);
@@ -109,9 +110,8 @@ namespace Spookline.SPC.Geometry {
         public static MinMaxAABB AABBFor(List<IBoundsContributor> contributors) {
             if (contributors == null || contributors.Count == 0) return new MinMaxAABB();
             var bounds = contributors[0].GetAABB();
-            for (var i = 1; i < contributors.Count; i++) {
-                bounds.Encapsulate(contributors[i].GetAABB());
-            }
+            for (var i = 1; i < contributors.Count; i++) { bounds.Encapsulate(contributors[i].GetAABB()); }
+
             return bounds;
         }
 
@@ -203,6 +203,121 @@ namespace Spookline.SPC.Geometry {
             return previous.Encapsulate(GetBoundsForCollider(collider));
         }
 
+        public static void PivotRecenter<T>(T pivot) where T : IPivotRecenter {
+            var bounds = pivot.GetPivotBounds();
+            var transform = pivot.GetPivotRootTransform();
+            var target = transform.Decompose();
+            target.position = bounds.center;
+            PivotRepivot(pivot, target);
+        }
+
+        public static void PivotRecenterGroundAligned<T>(T pivot) where T : IPivotRecenter {
+            var bounds = pivot.GetPivotBounds();
+            var transform = pivot.GetPivotRootTransform();
+            var target = transform.Decompose();
+            target.position = bounds.LocalGroundCenter;
+            PivotRepivot(pivot, target);
+        }
+
+        public static void PivotRecenterZForward<T>(T pivot) where T : IPivotRecenter {
+            PivotRecenterNormalized(pivot, new float3(0f, 0f, -1f));
+        }
+
+        public static void PivotRecenterProportional<T>(T pivot, float3 scale) where T : IPivotRecenter {
+            var bounds = pivot.GetPivotBounds();
+            var transform = pivot.GetPivotRootTransform();
+
+            var local = math.lerp(-bounds.halfExtent, bounds.halfExtent, scale);
+            var newCenter = bounds.TransformPoint(local);
+
+            var target = transform.Decompose();
+            target.position = newCenter;
+            PivotRepivot(pivot, target);
+        }
+
+        public static void PivotRecenterNormalized<T>(T pivot, float3 scale) where T : IPivotRecenter {
+            var bounds = pivot.GetPivotBounds();
+            var transform = pivot.GetPivotRootTransform();
+            var newCenter = bounds.TransformPoint(bounds.halfExtent * scale);
+            var target = transform.Decompose();
+            target.position = newCenter;
+            PivotRepivot(pivot, target);
+        }
+
+        public static void PivotRemoveRotation<T>(T pivot) where T : IPivotRecenter {
+            var transform = pivot.GetPivotRootTransform();
+            var target = transform.Decompose();
+            target.rotation = Quaternion.identity;
+            PivotRepivot(pivot, target);
+        }
+
+        public static void PivotRemoveScale<T>(T pivot) where T : IPivotRecenter {
+            var transform = pivot.GetPivotRootTransform();
+            var target = transform.Decompose();
+            target.scale = Vector3.one;
+            PivotRepivot(pivot, target);
+        }
+
+        public static void PivotRemovePosition<T>(T pivot) where T : IPivotRecenter {
+            var transform = pivot.GetPivotRootTransform();
+            var target = transform.Decompose();
+            target.position = Vector3.zero;
+            PivotRepivot(pivot, target);
+        }
+
+        public static void PivotRepivot<T>(T pivot, AffineTransform target, bool local = false) where T : IPivotRecenter {
+            var transform = pivot.GetPivotRootTransform();
+            var current = transform.Affine();
+
+            if (local) target = current.Transform(target);
+
+            var children = new Transform[transform.childCount];
+            var positions = new AffineTransform[children.Length];
+            for (var i = 0; i < children.Length; i++) {
+                var child = transform.GetChild(i);
+                children[i] = child;
+                positions[i] = child.Affine();
+            }
+
+            var deltas = Transforms.Deltas(current, target).Inverse();
+            target.Apply(transform);
+
+            pivot.ApplyPivotDeltas(deltas);
+
+            for (var i = 0; i < children.Length; i++) {
+                var child = children[i];
+                positions[i].Apply(child);
+            }
+        }
+
+        public static void PivotMovePivot<T>(T pivot, AffineTransform by, bool local = false) where T : IPivotRecenter {
+            var transform = pivot.GetPivotRootTransform();
+            var current = transform.Affine();
+            var target = local ? current.Transform(by) : by.Transform(current);
+            PivotRepivot(pivot, target);
+        }
+
+        public static void PivotMoveData<T>(T pivot, AffineTransform by, bool local = false) where T : IPivotRecenter {
+            var transform = pivot.GetPivotRootTransform();
+            var current = transform.Affine();
+            var target = local ? current.Transform(by) : by.Transform(current);
+            var deltas = Transforms.Deltas(current, target);
+            pivot.ApplyPivotDeltas(deltas);
+        }
+
+    }
+
+    public interface IPivotRecenter : IPivotDependent {
+
+        Transform GetPivotRootTransform();
+        OrientedBox GetPivotBounds();
+
+    }
+
+    public interface IPivotDependent {
+
+        public void ApplyPivotDeltas(AffineTransform delta);
+
     }
 
     public interface IBoundsContributor {
@@ -222,7 +337,7 @@ namespace Spookline.SPC.Geometry {
 
     public interface IColliderBoundsContributor : IBoundsContributor { }
 
-    public interface IBoundModificationReceiver {
+    public interface IBoundsReceiver {
 
         public void ReceiveBounds(OrientedBox box);
 
@@ -271,6 +386,7 @@ namespace Spookline.SPC.Geometry {
         }
 
         public string BoundsGroup => "Colliders";
+
     }
 
     public struct RendererBoundsContributor : IBoundsContributor {

@@ -12,16 +12,18 @@ namespace Spookline.SPC.Cleaver {
     [HideMonoScript]
     [ExecuteInEditMode]
     [AddComponentMenu("Cleaver/Proxy")]
-    public class CleaverProxy : SpookBehaviour<CleaverProxy>, IPivotDependent, IBoundModificationReceiver {
-
-        public float radius = 0.1f;
-
-
-        public OrientedBox box = new(0, 1, quaternion.identity);
+    public class CleaverProxy : SpookBehaviour<CleaverProxy>, IPivotDependent, IBoundsReceiver {
 
         [InlineProperty]
         [HideLabel]
         public IProxySampler sampler = new CenterSampler();
+
+        [Tooltip("Raycasts that land outside with a distance less than this value will be considered valid")]
+        [LabelText("Expansion"), Unit(Units.Meter)]
+        public float radius = 0.1f;
+
+        [HideLabel, TitleGroup("Volume")]
+        public OrientedBox box = new(0, 1, quaternion.identity);
 
         public ulong Id { get; private set; }
 
@@ -59,31 +61,6 @@ namespace Spookline.SPC.Cleaver {
             Gizmos.color = Color.magenta;
             var radiusBox = wsBox.Grow(radius);
             radiusBox.DrawGizmos();
-        }
-
-        [Title("Helpers")]
-        [Button("From Renderers")]
-        public void FromAllRenderers() {
-            OrientedBox boundsWs = BoundsHelper.ComputeBounds(GetComponentsInChildren<Renderer>());
-            box = transform.Affine().InverseTransform(boundsWs);
-        }
-
-        [Button("From Colliders")]
-        public void FromAllColliders() {
-            OrientedBox boundsWs = BoundsHelper.ComputeBounds(GetComponentsInChildren<Collider>());
-            box = transform.Affine().InverseTransform(boundsWs);
-        }
-
-        [Button]
-        public void FromRenderer(Renderer target) {
-            target ??= GetComponentInChildren<Renderer>();
-            var wsBox = target.ToOrientedBox();
-            box = transform.Affine().InverseTransform(wsBox);
-        }
-
-        [Button]
-        public void FromSizeAndOffset(float3 size, float3 offset = default, float3 euler = default) {
-            box = new OrientedBox(offset, size, quaternion.EulerXYZ(euler * Mathf.Deg2Rad));
         }
 
         public int GetPointCount() {

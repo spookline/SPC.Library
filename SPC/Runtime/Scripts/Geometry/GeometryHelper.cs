@@ -71,107 +71,6 @@ namespace Spookline.SPC.Geometry {
             }
         }
 
-        public static void Recenter<T>(T pivot) where T : IPivotRecenter {
-            var bounds = pivot.GetPivotBounds();
-            var transform = pivot.GetPivotRootTransform();
-            var target = transform.Decompose();
-            target.position = bounds.center;
-            Repivot(pivot, target);
-        }
-
-        public static void RecenterGroundAligned<T>(T pivot) where T : IPivotRecenter {
-            var bounds = pivot.GetPivotBounds();
-            var transform = pivot.GetPivotRootTransform();
-            var target = transform.Decompose();
-            target.position = bounds.LocalGroundCenter;
-            Repivot(pivot, target);
-        }
-
-        public static void RecenterZForward<T>(T pivot) where T : IPivotRecenter {
-            RecenterNormalized(pivot, new float3(0f, 0f, -1f));
-        }
-
-        public static void RecenterProportional<T>(T pivot, float3 scale) where T : IPivotRecenter {
-            var bounds = pivot.GetPivotBounds();
-            var transform = pivot.GetPivotRootTransform();
-
-            var local = math.lerp(-bounds.halfExtent, bounds.halfExtent, scale);
-            var newCenter = bounds.TransformPoint(local);
-
-            var target = transform.Decompose();
-            target.position = newCenter;
-            Repivot(pivot, target);
-        }
-
-        public static void RecenterNormalized<T>(T pivot, float3 scale) where T : IPivotRecenter {
-            var bounds = pivot.GetPivotBounds();
-            var transform = pivot.GetPivotRootTransform();
-            var newCenter = bounds.TransformPoint(bounds.halfExtent * scale);
-            var target = transform.Decompose();
-            target.position = newCenter;
-            Repivot(pivot, target);
-        }
-
-        public static void RemoveRotation<T>(T pivot) where T : IPivotRecenter {
-            var transform = pivot.GetPivotRootTransform();
-            var target = transform.Decompose();
-            target.rotation = Quaternion.identity;
-            Repivot(pivot, target);
-        }
-
-        public static void RemoveScale<T>(T pivot) where T : IPivotRecenter {
-            var transform = pivot.GetPivotRootTransform();
-            var target = transform.Decompose();
-            target.scale = Vector3.one;
-            Repivot(pivot, target);
-        }
-
-        public static void RemovePosition<T>(T pivot) where T : IPivotRecenter {
-            var transform = pivot.GetPivotRootTransform();
-            var target = transform.Decompose();
-            target.position = Vector3.zero;
-            Repivot(pivot, target);
-        }
-
-        public static void Repivot<T>(T pivot, AffineTransform target, bool local = false) where T : IPivotRecenter {
-            var transform = pivot.GetPivotRootTransform();
-            var current = transform.Affine();
-
-            if (local) target = current.Transform(target);
-
-            var children = new Transform[transform.childCount];
-            var positions = new AffineTransform[children.Length];
-            for (var i = 0; i < children.Length; i++) {
-                var child = transform.GetChild(i);
-                children[i] = child;
-                positions[i] = child.Affine();
-            }
-
-            var deltas = Transforms.Deltas(current, target).Inverse();
-            target.Apply(transform);
-
-            pivot.ApplyPivotDeltas(deltas);
-
-            for (var i = 0; i < children.Length; i++) {
-                var child = children[i];
-                positions[i].Apply(child);
-            }
-        }
-
-        public static void MovePivot<T>(T pivot, AffineTransform by, bool local = false) where T : IPivotRecenter {
-            var transform = pivot.GetPivotRootTransform();
-            var current = transform.Affine();
-            var target = local ? current.Transform(by) : by.Transform(current);
-            Repivot(pivot, target);
-        }
-
-        public static void MoveData<T>(T pivot, AffineTransform by, bool local = false) where T : IPivotRecenter {
-            var transform = pivot.GetPivotRootTransform();
-            var current = transform.Affine();
-            var target = local ? current.Transform(by) : by.Transform(current);
-            var deltas = Transforms.Deltas(current, target);
-            pivot.ApplyPivotDeltas(deltas);
-        }
 
         [Serializable, InlineProperty, HideLabel]
         private struct BoundsModification {
@@ -210,7 +109,7 @@ namespace Spookline.SPC.Geometry {
 
             public BoundsModification(Transform transform) : this() {
                 this.transform = transform;
-                receiver ??= transform.GetComponent<IBoundModificationReceiver>();
+                receiver ??= transform.GetComponent<IBoundsReceiver>();
             }
 
             [Button("Compute", ButtonSizes.Medium, Icon = SdfIconType.ArrowRepeat), HideIf("@hasBounds")]
@@ -228,7 +127,7 @@ namespace Spookline.SPC.Geometry {
 
 
             [TitleGroup("Actions"), ShowIf("@hasBounds"), HideLabel]
-            public IBoundModificationReceiver receiver;
+            public IBoundsReceiver receiver;
 
             [ButtonGroup("Actions/Buttons"), ShowIf("@hasBounds"),
              Button("Send", ButtonSizes.Medium, Icon = SdfIconType.Send)]
@@ -261,6 +160,7 @@ namespace Spookline.SPC.Geometry {
                         var encapsulated = contributor.EncapsulateIn(basis);
                         basis = basis.EncapsulateFixedCenter(encapsulated);
                     }
+
                     cachedBounds = basis;
                 }
 
@@ -313,6 +213,117 @@ namespace Spookline.SPC.Geometry {
 
         }
 
+        [Serializable, InlineProperty, HideLabel]
+        private struct PivotRecenter {
+
+            [HideInInspector]
+            public IPivotRecenter target;
+
+            [TabGroup("Quick"), HideLabel, ShowInInspector, InlineProperty]
+            public Quick quick;
+
+            [TabGroup("Align"), HideLabel, ShowInInspector, InlineProperty]
+            public Align align;
+
+            [TabGroup("Custom"), HideLabel, ShowInInspector, InlineProperty]
+            public Custom custom;
+
+            public PivotRecenter(IPivotRecenter target) {
+                this.target = target;
+                align = new Align(target);
+                custom = new Custom(target);
+                quick = new Quick(target);
+            }
+
+
+            [Serializable]
+            public struct Quick {
+
+                [HideInInspector]
+                public IPivotRecenter target;
+
+                public Quick(IPivotRecenter target) {
+                    this.target = target;
+                }
+
+                [ButtonGroup, Button, PropertyOrder(0)]
+                public void Center() => BoundsHelper.PivotRecenter(target);
+
+                [ButtonGroup, Button, PropertyOrder(0)]
+                public void GroundCenter() => BoundsHelper.PivotRecenterGroundAligned(target);
+
+                [ButtonGroup, Button, PropertyOrder(0)]
+                public void ZForward() => BoundsHelper.PivotRecenterZForward(target);
+
+
+                [TitleGroup("Clear", alignment: TitleAlignments.Centered)]
+                [ButtonGroup("Clear/Buttons"), Button("Position"), PropertyOrder(1)]
+                public void ClearPosition() => BoundsHelper.PivotRemovePosition(target);
+
+                [ButtonGroup("Clear/Buttons"), Button("Rotation"), PropertyOrder(1)]
+                public void ClearRotation() => BoundsHelper.PivotRemoveRotation(target);
+
+                [ButtonGroup("Clear/Buttons"), Button("Scale"), PropertyOrder(1)]
+                public void ClearScale() => BoundsHelper.PivotRemoveScale(target);
+
+            }
+
+            [Serializable]
+            public struct Align {
+
+                [HideInInspector]
+                public IPivotRecenter target;
+
+                public Align(IPivotRecenter target) {
+                    this.target = target;
+                    proportionalScale = new float3(0.5f, 0.5f, 0.5f);
+                    normalizedScale = float3.zero;
+                }
+
+                [BoxGroup("Proportional", showLabel: false), HideLabel]
+                public float3 proportionalScale;
+
+                [BoxGroup("Proportional"), Button]
+                public void AlignProportional() => BoundsHelper.PivotRecenterProportional(target, proportionalScale);
+
+
+                [BoxGroup("Normalized", showLabel: false), HideLabel]
+                public float3 normalizedScale;
+
+                [BoxGroup("Normalized"), Button]
+                public void AlignNormalized() => BoundsHelper.PivotRecenterNormalized(target, normalizedScale);
+
+            }
+
+            [Serializable]
+            public struct Custom {
+
+                [HideInInspector]
+                public IPivotRecenter target;
+
+                public Custom(IPivotRecenter target) {
+                    this.target = target;
+                    custom = TRS.Identity;
+                    local = true;
+                }
+
+                [HideLabel, InlineProperty]
+                public TRS custom;
+
+                public bool local;
+
+                [ButtonGroup, Button]
+                public void Set() => BoundsHelper.PivotRepivot(target, custom, local);
+
+                [ButtonGroup, Button]
+                public void Move() => BoundsHelper.PivotMovePivot(target, custom, local);
+
+                [ButtonGroup, Button]
+                public void MoveData() => BoundsHelper.PivotMoveData(target, custom, local);
+
+            }
+
+        }
 
         [Serializable]
         private struct GroupFilter {
@@ -328,6 +339,7 @@ namespace Spookline.SPC.Geometry {
         }
 
         private enum BoundsType {
+
             [Tooltip("Grows an anchored box around the current pivot")]
             LocalBounds,
             [Tooltip("Computes a non restricted oriented box")]

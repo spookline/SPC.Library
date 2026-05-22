@@ -18,8 +18,7 @@ namespace Spookline.SPC.Cleaver {
     [HideMonoScript]
     [ExecuteInEditMode]
     [AddComponentMenu("Cleaver/Section")]
-    public class CleaverSection : SpookBehaviour<CleaverSection>, IPivotRecenter, ICustomBoundsProvider,
-        IBoundModificationReceiver {
+    public class CleaverSection : SpookBehaviour<CleaverSection>, IPivotDependent, ICustomBoundsProvider, IBoundsReceiver {
 
         [FormerlySerializedAs("region")]
         public CleaverProxyGroup proxyGroup;
@@ -204,21 +203,6 @@ namespace Spookline.SPC.Cleaver {
             volumes = next.Select(x => vt.Transform(x)).ToArray();
         }
 
-
-#if UNITY_EDITOR
-        [NonSerialized]
-        private PivotRecenter _pivot;
-
-        [ShowInInspector, HideInPlayMode]
-        private PivotRecenter Pivot {
-            get {
-                if (_pivot.target == null) _pivot = new PivotRecenter(this);
-                return _pivot;
-            }
-            set => _pivot = value;
-        }
-#endif
-
         public MinMaxAABB ComputeBounds() {
             if (volumes.Length == 0) return new MinMaxAABB();
             var affine = transform.Affine();
@@ -249,14 +233,6 @@ namespace Spookline.SPC.Cleaver {
             }
         }
 
-        public Transform GetPivotRootTransform() {
-            return transform;
-        }
-
-        public OrientedBox GetPivotBounds() {
-            return ComputeBounds();
-        }
-
         public void ApplyPivotDeltas(AffineTransform delta) {
             for (var i = 0; i < points.Count; i++) {
                 var point = points[i];
@@ -270,18 +246,6 @@ namespace Spookline.SPC.Cleaver {
                 var volume = volumes[i];
                 volumes[i] = delta.Transform(volume);
             }
-        }
-
-        public OrientedBox GetBounds() {
-            return ComputeBounds();
-        }
-
-        public MinMaxAABB GetAABB() {
-            return ComputeBounds();
-        }
-
-        public OrientedBox EncapsulateIn(OrientedBox original) {
-            return original.Encapsulate(GetBounds());
         }
 
         public string BoundsGroup => "Cleaver Sections";

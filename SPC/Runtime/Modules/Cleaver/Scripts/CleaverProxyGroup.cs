@@ -14,7 +14,7 @@ namespace Spookline.SPC.Cleaver {
     [HideMonoScript]
     [ExecuteInEditMode]
     [AddComponentMenu("Cleaver/Proxy Group")]
-    public class CleaverProxyGroup : SpookBehaviour<CleaverProxyGroup>, IBoundModificationReceiver {
+    public class CleaverProxyGroup : SpookBehaviour<CleaverProxyGroup>, IBoundsReceiver {
 
         public CleaverProxyGroup parent;
 
@@ -42,6 +42,7 @@ namespace Spookline.SPC.Cleaver {
 
         private void Awake() {
             _proxies = GetComponents<CleaverProxy>();
+
             Id = IdGenerator.NextId();
             Dirty = true;
             On<CleaverCheckForUpdateEvt>().Do(OnCheckForUpdate);
