@@ -133,6 +133,7 @@ namespace Spookline.SPC.Cleaver {
         }
 
         private void OnDrawGizmosSelected() {
+            if (!GizmosHelper.IsSelected(gameObject)) return;
             var evt = GizmoEvt.EditorGizmosSelected;
             OnGizmos(ref evt);
         }

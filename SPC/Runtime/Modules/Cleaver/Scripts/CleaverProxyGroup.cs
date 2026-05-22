@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Sirenix.OdinInspector;
 using Spookline.SPC.Common;
 using Spookline.SPC.Debugging;
@@ -13,7 +14,7 @@ namespace Spookline.SPC.Cleaver {
     [HideMonoScript]
     [ExecuteInEditMode]
     [AddComponentMenu("Cleaver/Proxy Group")]
-    public class CleaverProxyGroup : SpookBehaviour<CleaverProxyGroup> {
+    public class CleaverProxyGroup : SpookBehaviour<CleaverProxyGroup>, IBoundModificationReceiver {
 
         public CleaverProxyGroup parent;
 
@@ -157,6 +158,12 @@ namespace Spookline.SPC.Cleaver {
             }
 
             return true;
+        }
+
+        public void ReceiveBounds(OrientedBox box) {
+            var self = transform.ToOrientedBox();
+            self = self.Encapsulate(box);
+            boundsSize = self.Size;
         }
 
     }

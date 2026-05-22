@@ -13,6 +13,18 @@ namespace Spookline.SPC.Geometry {
     [StructLayout(LayoutKind.Sequential)]
     public struct OrientedBox {
 
+        public static readonly OrientedBox identity = new(
+            float3.zero,
+            new float3(1f, 1f, 1f),
+            quaternion.identity
+        );
+
+        public static readonly OrientedBox zero = new(
+            float3.zero,
+            float3.zero,
+            quaternion.identity
+        );
+
         public float3 center;
         public float3 halfExtent;
         public quaternion rotation;
@@ -79,6 +91,21 @@ namespace Spookline.SPC.Geometry {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public OrientedBox Encapsulate(OrientedBox other) {
             return OrientedBoxMath.Encapsulate(this, other);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public OrientedBox Encapsulate(float3 sphereCenter, float radius) {
+            return OrientedBoxMath.Encapsulate(this, sphereCenter, radius);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public OrientedBox Encapsulate(float3 point) {
+            return OrientedBoxMath.Encapsulate(this, point);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public OrientedBox EncapsulateFixedCenter(OrientedBox other) {
+            return OrientedBoxMath.EncapsulateFixedCenter(this, other);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -210,6 +237,48 @@ namespace Spookline.SPC.Geometry {
             var worldCenter = a.TransformPoint(localCenter);
 
             return new OrientedBox(worldCenter, halfExtent * 2f, a.rotation);
+        }
+
+        public static OrientedBox EncapsulateFixedCenter(OrientedBox a, OrientedBox b) {
+            var maxAbs = a.halfExtent;
+
+            for (var i = 0; i < 8; i++) {
+                var bLocalCorner = GetCornerLocal(b.halfExtent, i);
+                var bWorldCorner = b.TransformPoint(bLocalCorner);
+                var pointInALocal = a.InverseTransformPoint(bWorldCorner);
+
+                maxAbs = math.max(maxAbs, math.abs(pointInALocal));
+            }
+
+            return new OrientedBox(a.center, maxAbs * 2f, a.rotation);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static OrientedBox Encapsulate(OrientedBox box, float3 sphereCenter, float radius) {
+            var localCenter = box.InverseTransformPoint(sphereCenter);
+
+            var min = math.min(-box.halfExtent, localCenter - radius);
+            var max = math.max(box.halfExtent, localCenter + radius);
+
+            var newLocalCenter = (min + max) * 0.5f;
+            var newHalfExtent = (max - min) * 0.5f;
+            var newWorldCenter = box.TransformPoint(newLocalCenter);
+
+            return new OrientedBox(newWorldCenter, newHalfExtent * 2f, box.rotation);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static OrientedBox Encapsulate(OrientedBox box, float3 point) {
+            var localPoint = box.InverseTransformPoint(point);
+
+            var min = math.min(-box.halfExtent, localPoint);
+            var max = math.max(box.halfExtent, localPoint);
+
+            var newLocalCenter = (min + max) * 0.5f;
+            var newHalfExtent = (max - min) * 0.5f;
+            var newWorldCenter = box.TransformPoint(newLocalCenter);
+
+            return new OrientedBox(newWorldCenter, newHalfExtent * 2f, box.rotation);
         }
 
         // Produces the smallest world-axis-aligned box containing both boxes.
@@ -446,7 +515,7 @@ namespace Spookline.SPC.Geometry {
             Gizmos.matrix = previousMatrix;
         }
 
-        public static void OrientedBox<T>(this T api, OrientedBox box, bool wireframe = true) where T: IDrawingAPI {
+        public static void OrientedBox<T>(this T api, OrientedBox box, bool wireframe = true) where T : IDrawingAPI {
             using (api.ScopeTransformation(
                        Matrix4x4.TRS(
                            box.center,

@@ -19,8 +19,9 @@ namespace Spookline.SPC {
         private static bool GetEnvironmentDebugging() {
 #if DEBUG
             return true;
-#endif
+#else
             return false;
+#endif
         }
 
         public static bool HasDebugFlag(string flag) => Instance?.DebugFlags.Contains(flag) ?? false;

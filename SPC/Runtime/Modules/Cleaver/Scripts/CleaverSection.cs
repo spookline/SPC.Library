@@ -18,7 +18,8 @@ namespace Spookline.SPC.Cleaver {
     [HideMonoScript]
     [ExecuteInEditMode]
     [AddComponentMenu("Cleaver/Section")]
-    public class CleaverSection : SpookBehaviour<CleaverSection>, IPivotRecenter {
+    public class CleaverSection : SpookBehaviour<CleaverSection>, IPivotRecenter, ICustomBoundsProvider,
+        IBoundModificationReceiver {
 
         [FormerlySerializedAs("region")]
         public CleaverProxyGroup proxyGroup;
@@ -181,6 +182,7 @@ namespace Spookline.SPC.Cleaver {
         }
 
         private void OnDrawGizmosSelected() {
+            if (!GizmosHelper.IsSelected(gameObject)) return;
             var evt = GizmoEvt.EditorGizmosSelected;
             OnGizmos(ref evt);
         }
@@ -269,6 +271,54 @@ namespace Spookline.SPC.Cleaver {
                 volumes[i] = delta.Transform(volume);
             }
         }
+
+        public OrientedBox GetBounds() {
+            return ComputeBounds();
+        }
+
+        public MinMaxAABB GetAABB() {
+            return ComputeBounds();
+        }
+
+        public OrientedBox EncapsulateIn(OrientedBox original) {
+            return original.Encapsulate(GetBounds());
+        }
+
+        public string BoundsGroup => "Cleaver Sections";
+
+        public void ContributeBoundingBoxes(List<IBoundsContributor> contributors) {
+            var affine = transform.Affine();
+            foreach (var box in volumes) {
+                var wsBox = affine.Transform(box);
+                contributors.Add(new CleaverSectionVolume(wsBox));
+            }
+        }
+
+        public void ReceiveBounds(OrientedBox box) {
+            var affine = transform.Affine().Inverse();
+            var newVolume = affine.Transform(box);
+            volumes = new[] { newVolume };
+        }
+
+    }
+
+    public struct CleaverSectionVolume : IBoundsContributor {
+
+        public OrientedBox box;
+
+        public CleaverSectionVolume(OrientedBox box) {
+            this.box = box;
+        }
+
+        public OrientedBox GetBounds() => box;
+
+        public MinMaxAABB GetAABB() => box.AABB();
+
+        public OrientedBox EncapsulateIn(OrientedBox original) {
+            return original.Encapsulate(box);
+        }
+
+        public string BoundsGroup => "Cleaver Section Volumes";
 
     }
 }

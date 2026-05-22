@@ -19,6 +19,24 @@ namespace Spookline.SPC.Geometry {
             return new TRS(pos, rot, scale);
         }
 
+        public static void Decompose(
+            this AffineTransform transform,
+            out float3 pos,
+            out quaternion rot,
+            out float3 scale
+        ) {
+            math.decompose(transform, out pos, out rot, out scale);
+        }
+
+        public static void Decompose(
+            this AffineTransform transform,
+            out float3 pos,
+            out quaternion rot
+        ) {
+            pos = transform.t;
+            rot = math.rotation(transform.rs);
+        }
+
         public static TRS Decompose(this RigidTransform transform) => transform;
 
         public static AffineTransform Inverse(this AffineTransform transform) => math.inverse(transform);
@@ -110,6 +128,14 @@ namespace Spookline.SPC.Geometry {
             var y = math.length(linear.c1);
             var z = math.length(linear.c2);
             return new float3(x, y, z) * scale;
+        }
+
+        public static bool IsUniformScale(this float3 scale) {
+            return math.abs(scale.x - scale.y) < math.EPSILON && math.abs(scale.y - scale.z) < math.EPSILON;
+        }
+
+        public static bool IsUniformScale(this Vector3 scale) {
+            return Mathf.Approximately(scale.x, scale.y) && Mathf.Approximately(scale.y, scale.z);
         }
 
     }

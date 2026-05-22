@@ -6,7 +6,7 @@ using UnityEngine.InputSystem;
 
 namespace Spookline.SPC.Actor.FirstPerson {
     [HideMonoScript]
-    public partial class CharacterFirstPersonController : SpookBehaviour<CharacterFirstPersonController>, IPossessor {
+    public partial class CharacterFirstPersonController : SpookBehaviour<CharacterFirstPersonController>, IPossessor, IHideScriptSceneIcon {
 
         [TabGroup("Ground")]
         public LayerMask groundLayer;

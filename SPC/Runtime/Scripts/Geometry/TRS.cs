@@ -32,7 +32,7 @@ namespace Spookline.SPC.Geometry {
 
         public void Apply(Transform transform) {
             transform.SetPositionAndRotation(position, rotation);
-            Transforms.SetGlobalScale(transform, scale);
+            transform.SetGlobalScale(scale);
         }
 
         public void ApplyRigid(Transform transform) {

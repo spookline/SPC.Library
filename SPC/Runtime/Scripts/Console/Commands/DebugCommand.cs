@@ -5,7 +5,6 @@ using System.Linq;
 using System.Text;
 using Sirenix.Utilities;
 using Spookline.SPC.Common;
-using Spookline.SPC.Draw;
 using Spookline.SPC.Draw.Poly;
 
 namespace Spookline.SPC.Console.Commands {
@@ -21,12 +20,18 @@ namespace Spookline.SPC.Console.Commands {
         public DebugCommand() {
             Arguments(_debugDraw, _debugging);
             Subcommands(new FlagsSubcommand(), new GizmosSubcommand());
-            Subcommands(new ActionCommand("gc", "Triggers a manual garbage collection.", _ => {
-                var stopwatch = Stopwatch.StartNew();
-                GC.Collect();
-                stopwatch.Stop();
-                return CommandResult.Successful($"Garbage collection took {stopwatch.ElapsedMilliseconds}ms");
-            }));
+            Subcommands(
+                new ActionCommand(
+                    "gc",
+                    "Triggers a manual garbage collection.",
+                    _ => {
+                        var stopwatch = Stopwatch.StartNew();
+                        GC.Collect();
+                        stopwatch.Stop();
+                        return CommandResult.Successful($"Garbage collection took {stopwatch.ElapsedMilliseconds}ms");
+                    }
+                )
+            );
         }
 
 
@@ -48,9 +53,14 @@ namespace Spookline.SPC.Console.Commands {
             if (instance.DebugGizmos) {
                 builder.AppendLine($"  Interval: {1f / instance.debugRefreshInterval:F2} fps");
                 builder.AppendLine($"  Draw: {instance.DebugDraw} (Freq: {instance.drawFrequency})");
-                builder.AppendLine($"  Screen Overlay: {instance.DebugScreenOverlay} (Freq: {instance.screenOverlayFrequency})");
-                builder.AppendLine($"  World Overlay: {instance.DebugWorldOverlay} (Freq: {instance.worldOverlayFrequency})");
+                builder.AppendLine(
+                    $"  Screen Overlay: {instance.DebugScreenOverlay} (Freq: {instance.screenOverlayFrequency})"
+                );
+                builder.AppendLine(
+                    $"  World Overlay: {instance.DebugWorldOverlay} (Freq: {instance.worldOverlayFrequency})"
+                );
             }
+
             builder.AppendLine($"Active PolyDrawRenderer: {(bool)PolyDrawRenderer.InstanceOrNull}");
             return CommandResult.Successful(builder.ToString());
         }
@@ -94,6 +104,7 @@ namespace Spookline.SPC.Console.Commands {
                                     $"Debug drawing frequency set to {instance.drawFrequency}"
                                 );
                             }
+
                             instance.SetDebugDraw(!instance.DebugDraw);
                             return CommandResult.Successful(
                                 $"Debug drawing is now {(instance.DebugDraw ? "enabled" : "disabled")}"
@@ -105,6 +116,7 @@ namespace Spookline.SPC.Console.Commands {
                                     $"Debug screen overlay frequency set to {instance.screenOverlayFrequency}"
                                 );
                             }
+
                             instance.SetDebugScreenOverlay(!instance.DebugScreenOverlay);
                             return CommandResult.Successful(
                                 $"Debug screen overlay is now {(instance.DebugScreenOverlay ? "enabled" : "disabled")}"

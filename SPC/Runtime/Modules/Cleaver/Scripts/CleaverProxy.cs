@@ -12,11 +12,11 @@ namespace Spookline.SPC.Cleaver {
     [HideMonoScript]
     [ExecuteInEditMode]
     [AddComponentMenu("Cleaver/Proxy")]
-    public class CleaverProxy : SpookBehaviour<CleaverProxy> {
+    public class CleaverProxy : SpookBehaviour<CleaverProxy>, IPivotDependent, IBoundModificationReceiver {
 
         public float radius = 0.1f;
 
-        [HideInInspector]
+
         public OrientedBox box = new(0, 1, quaternion.identity);
 
         [InlineProperty]
@@ -30,6 +30,7 @@ namespace Spookline.SPC.Cleaver {
         }
 
         private void OnDrawGizmosSelected() {
+            if (!GizmosHelper.IsSelected(gameObject)) return;
             using var array = new NativeArray<float3>(GetPointCount(), Allocator.Temp);
             SamplePoints(array, 0);
 
@@ -103,6 +104,14 @@ namespace Spookline.SPC.Cleaver {
                 pointIndex = 0,
                 pointCount = (ushort)GetPointCount()
             };
+        }
+
+        public void ApplyPivotDeltas(AffineTransform delta) {
+            box = delta.Transform(box);
+        }
+
+        public void ReceiveBounds(OrientedBox newBox) {
+            box = transform.Affine().InverseTransform(newBox);
         }
 
     }

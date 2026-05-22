@@ -260,15 +260,18 @@ namespace Spookline.SPC.Cleaver.Points {
             var result = EditorGUILayout.Vector3Field(GUIContent.none, value);
             EditorGUILayout.EndHorizontal();
             return result;
-#endif
+#else
             return value;
+#endif
+
         }
 
         public static float Float(this EditablePointGuiFactory _, string label, float value) {
 #if UNITY_EDITOR
             return EditorGUILayout.FloatField(label, value);
-#endif
+#else
             return value;
+#endif
         }
 
     }
