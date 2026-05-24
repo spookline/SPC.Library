@@ -4,6 +4,7 @@ using Sirenix.OdinInspector;
 using Sirenix.Serialization;
 using Spookline.SPC.Debugging;
 using Spookline.SPC.Draw;
+using Spookline.SPC.Geometry;
 using Unity.Mathematics;
 using UnityEngine;
 using UnityEngine.AddressableAssets;
@@ -70,11 +71,8 @@ namespace Spookline.SPC.Cleaver.Points {
         }
 
         public async UniTaskVoid Load() {
-            math.decompose(Transform, out var pos, out var rot, out var scale);
             var obj = await Addressables.InstantiateAsync(Prefab);
-            obj.transform.localScale = scale;
-            obj.transform.localPosition = pos;
-            obj.transform.localRotation = rot;
+            Transform.Apply(obj.transform);
             obj.hideFlags = HideFlags.DontSave;
             SpawnedObject = obj;
         }
