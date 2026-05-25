@@ -8,7 +8,8 @@
     "Spookline.SPC.Conscript"
   ],
   "precompiledReferences": [
-    "Newtonsoft.Json.dll"
+    "Newtonsoft.Json.dll",
+    "nunit.framework.dll"
   ],
   "optionalUnityReferences": [
     "TestAssemblies"
