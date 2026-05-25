@@ -1,0 +1,20 @@
+{
+  "name": "Spookline.SPC.Tests",
+  "rootNamespace": "Spookline.SPC.Tests",
+  "references": [
+    "HELIX",
+    "HELIX.Widgets",
+    "Spookline.SPC",
+    "Spookline.SPC.Conscript"
+  ],
+  "precompiledReferences": [
+    "Newtonsoft.Json.dll"
+  ],
+  "optionalUnityReferences": [
+    "TestAssemblies"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": []
+}
