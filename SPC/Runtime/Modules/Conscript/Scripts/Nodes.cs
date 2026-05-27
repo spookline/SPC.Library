@@ -8,10 +8,25 @@ using JetBrains.Annotations;
 using UnityEngine;
 
 namespace Spookline.SPC.Conscript {
-    public class ConscriptHierarchy {
+    public class ConscriptHierarchy : DiagnosticableTreeBase {
 
         public ConscriptNode Root { get; }
         public List<ConscriptNode> Nodes { get; }
+
+        public uint CurrentTick { get; private set; }
+        private bool _hasYielded = false;
+
+        public static uint GetNextTick(uint lastTick) {
+            if (lastTick == uint.MaxValue) return 1;
+            return lastTick + 1;
+        }
+
+        public bool WasTickedLastFrame(uint lastTick) {
+            if (lastTick == 0 || CurrentTick == 0) return false;
+            return CurrentTick == GetNextTick(lastTick);
+        }
+
+        public bool IsInitial => CurrentTick > 0;
 
         public ConscriptHierarchy(ConscriptNode root) {
             Root = root;
@@ -20,10 +35,12 @@ namespace Spookline.SPC.Conscript {
             Nodes = visited;
         }
 
-        private static void Link(ConscriptNode node, List<ConscriptNode> visited) {
+        private void Link(ConscriptNode node, List<ConscriptNode> visited) {
             if (visited.Contains(node)) return;
             node.PostInit();
+            node.Hierarchy = this;
             node.HierarchyIndex = visited.Count;
+            node.LastTick = 0;
             visited.Add(node);
 
             var interrupters = new List<ConscriptNode>();
@@ -40,14 +57,36 @@ namespace Spookline.SPC.Conscript {
         /// Performs a single full tick of the behavior hierarchy tree.
         /// </summary>
         public void Tick() {
-            Root.TickOrBegin();
+            _hasYielded = false;
+            CurrentTick = GetNextTick(CurrentTick);
+            Root.RootTick();
+
+            if (_hasYielded) {
+                Debug.Log("Behavior tree yielded during tick");
+                Tick();
+            }
         }
 
         /// <summary>
         /// Fully resets the behavior hierarchy tree.
         /// </summary>
         public void Reset() {
+            _hasYielded = false;
+            CurrentTick = 0;
             Root.Reset();
+        }
+
+        internal void NotifyYield() {
+            _hasYielded = true;
+        }
+
+        public override void DebugFillProperties(DiagnosticPropertiesBuilder properties) {
+            base.DebugFillProperties(properties);
+            properties.Add(new DiagnosticsProperty<uint>("Tick", CurrentTick));
+        }
+
+        public override List<DiagnosticsNode> DebugDescribeChildren() {
+            return new List<DiagnosticsNode> { Root.ToDiagnosticsNodeSafe() };
         }
 
     }
@@ -96,37 +135,22 @@ namespace Spookline.SPC.Conscript {
     public class ConscriptNode : DiagnosticableTreeBase, IEnumerable<ConscriptNode> {
 
         // Never null at actual runtime
-        internal RuntimeNodeList children;
+        internal readonly RuntimeNodeList children = new();
         private bool _scheduled;
 
         // Runtime
         public NodeState State { get; private set; } = NodeState.Uninitialized;
         public ConscriptNode Parent { get; internal set; }
         public int HierarchyIndex { get; internal set; }
+        public ConscriptHierarchy Hierarchy { get; internal set; }
+        public uint LastTick { get; internal set; }
+        public bool WasTickedLastFrame => Hierarchy.WasTickedLastFrame(LastTick);
+        public bool WasTickedThisFrame => Hierarchy.CurrentTick == LastTick;
 
         // Siblings with higher priority are interrupters
         public IReadOnlyList<ConscriptNode> Interrupters { get; internal set; }
 
-        [CanBeNull]
-        public IReadOnlyList<ConscriptNode> Children {
-            get => children;
-
-            // Used by the builder dsl
-            protected set {
-                if (children == null) {
-                    children = new RuntimeNodeList(value);
-                    return;
-                }
-
-                Debug.LogError("Cannot set children after initialization");
-            }
-        }
-
-        // Used by the builder dsl
-        public void Add(ConscriptNode node) {
-            children ??= new RuntimeNodeList();
-            children.Add(node);
-        }
+        public IReadOnlyList<ConscriptNode> Children => children;
 
         public virtual bool IsInterrupter => false;
 
@@ -150,9 +174,8 @@ namespace Spookline.SPC.Conscript {
 
         // Will always be called before any runtime methods execute
         internal void PostInit() {
-            children ??= new RuntimeNodeList();
-            children.Seal();
             Initialize();
+            children.Seal();
         }
 
         protected virtual void Initialize() { }
@@ -167,10 +190,6 @@ namespace Spookline.SPC.Conscript {
 
         protected virtual void OnInterrupt() { }
 
-        protected virtual NodeState OnChildComplete(ConscriptNode child, NodeState result) {
-            return State;
-        }
-
         protected virtual NodeState OnUpdate() => NodeState.Succeeded;
 
         protected virtual void OnStateChange(NodeState previous, NodeState next) { }
@@ -178,6 +197,8 @@ namespace Spookline.SPC.Conscript {
         private void ChangeState(NodeState next) {
             var previous = State;
             if (previous == next) return;
+            if (!previous.IsActive() && next is NodeState.Interrupted) return;
+
             var willTerminate = next.HasTerminatedOrInitial();
             if (previous is NodeState.Uninitialized) goto body;
 
@@ -196,14 +217,14 @@ namespace Spookline.SPC.Conscript {
                 Debug.LogException(e); //
             }
 
+            if (next is NodeState.Yield) Hierarchy.NotifyYield();
+
             State = next;
 
             if (willTerminate) {
                 try { OnEnd(); } catch (Exception e) {
                     Debug.LogException(e); //
                 }
-
-                Parent?.NotifyChildComplete(this, next);
             }
         }
 
@@ -213,6 +234,7 @@ namespace Spookline.SPC.Conscript {
 
             State = NodeState.Uninitialized;
             _scheduled = false;
+            LastTick = 0;
             children.Reset();
         }
 
@@ -221,20 +243,19 @@ namespace Spookline.SPC.Conscript {
             Reset();
         }
 
-        private void NotifyChildComplete(ConscriptNode child, NodeState result) {
-            var next = NodeState.Failed;
-            try { next = OnChildComplete(child, result); } catch (Exception e) { Debug.LogException(e); }
-
-            ChangeState(next);
-        }
-
-
         internal void Tick() {
+            if (WasTickedThisFrame) {
+                _scheduled = false;
+                return;
+            }
+
             var wasActive = State.IsActive();
             if (_scheduled) {
                 _scheduled = false;
-                if (!wasActive) Begin();
-                goto body;
+                if (!wasActive) {
+                    Begin();
+                    goto skipInterrupts;
+                }
             }
 
             if (!wasActive) return;
@@ -242,13 +263,14 @@ namespace Spookline.SPC.Conscript {
             // TODO: Check for interrupts and probably handle child checking differently: Do not call events on children
             // That aren't supposed to receive it probably.
 
-            if (WillInterrupt()) {
-                ChangeState(NodeState.Interrupted);
-                return;
+            if (WasTickedLastFrame) {
+                if (WillInterrupt()) {
+                    ChangeState(NodeState.Interrupted);
+                    return;
+                }
             }
 
-            body:
-            { }
+            skipInterrupts:
             if (State.IsTicking()) {
                 var result = NodeState.Failed;
                 try {
@@ -260,11 +282,10 @@ namespace Spookline.SPC.Conscript {
                 ChangeState(result);
             }
 
-            if (State.IsActive()) children.Tick();
+            LastTick = Hierarchy.CurrentTick;
         }
 
         private void Begin() {
-            Reset();
             var result = NodeState.Failed;
             try { result = OnBegin(); } catch (Exception e) {
                 Debug.LogException(e); //
@@ -274,19 +295,41 @@ namespace Spookline.SPC.Conscript {
         }
 
         internal void TickOrBegin() {
+            if (WasTickedThisFrame) return;
+            if (State.HasTerminated()) Reset();
             _scheduled = true;
             Tick();
         }
 
-        /// <summary>
-        /// Schedules a child node to run after the current nodes tick if it is not already scheduled.
-        /// </summary>
+        internal void RootTick() {
+            if (State.HasTerminated()) Reset();
+            TickOrBegin();
+        }
+
+        protected void Reset(ConscriptNode node) {
+            node.InterruptAndReset();
+        }
+
         protected void Schedule(ConscriptNode node) {
 #if UNITY_ASSERTIONS
             Debug.Assert(children.Contains(node), $"{node} is not a child of {this}");
             Debug.Assert(node != this, $"{node} tried to schedule itself");
 #endif
             node._scheduled = true;
+        }
+
+        protected NodeState TickChild(ConscriptNode node) {
+            node.Tick();
+            return node.State;
+        }
+
+        protected NodeState ScheduleImmediate(ConscriptNode node) {
+#if UNITY_ASSERTIONS
+            Debug.Assert(children.Contains(node), $"{node} is not a child of {this}");
+            Debug.Assert(node != this, $"{node} tried to schedule itself");
+#endif
+            node.TickOrBegin();
+            return node.State;
         }
 
         /// <summary>
@@ -310,6 +353,10 @@ namespace Spookline.SPC.Conscript {
             return endState;
         }
 
+
+        internal NodeState ScheduleImmediateInternal(ConscriptNode node) => ScheduleImmediate(node);
+        internal NodeState ExecuteInternal(ConscriptNode node) => Execute(node);
+
         public override List<DiagnosticsNode> DebugDescribeChildren() {
             return children.Count == 0
                 ? new List<DiagnosticsNode>()
@@ -318,6 +365,7 @@ namespace Spookline.SPC.Conscript {
 
         public override void DebugFillProperties(DiagnosticPropertiesBuilder properties) {
             properties.Add(new EnumProperty<NodeState>("state", State));
+            properties.Add(new DiagnosticsProperty<uint>("lastTick", LastTick));
         }
 
         internal class RuntimeNodeList : IReadOnlyList<ConscriptNode> {
@@ -335,6 +383,7 @@ namespace Spookline.SPC.Conscript {
                 _buildable = true;
             }
 
+
             public void Tick() {
                 for (var i = 0; i < _nodes.Count; i++) { _nodes[i].Tick(); }
             }
@@ -347,6 +396,10 @@ namespace Spookline.SPC.Conscript {
                 for (var i = 0; i < _nodes.Count; i++) { _nodes[i].Reset(); }
             }
 
+            public void InterruptAndReset() {
+                for (var i = 0; i < _nodes.Count; i++) { _nodes[i].InterruptAndReset(); }
+            }
+
             public void Seal() {
                 _buildable = false;
             }
@@ -355,6 +408,11 @@ namespace Spookline.SPC.Conscript {
             public void Add(ConscriptNode node) {
                 if (!_buildable) throw new InvalidOperationException("Cannot add nodes after finalization");
                 ((List<ConscriptNode>)_nodes).Add(node);
+            }
+
+            public void AddRange(IEnumerable<ConscriptNode> nodes) {
+                if (!_buildable) throw new InvalidOperationException("Cannot add nodes after finalization");
+                ((List<ConscriptNode>)_nodes).AddRange(nodes);
             }
 
 
@@ -376,17 +434,33 @@ namespace Spookline.SPC.Conscript {
 
     }
 
+    public abstract class CollectionConscriptNode : ConscriptNode {
+
+        protected virtual int MaxCount => int.MaxValue;
+
+        // Used by the builder dsl
+        public void Add(ConscriptNode node) {
+            if (children.Count >= MaxCount) {
+                throw new InvalidOperationException($"Cannot add more than {MaxCount} children to {GetType().Name}");
+            }
+
+            children.Add(node);
+        }
+
+    }
+
     public enum NodeState : byte {
 
         Uninitialized = 0, // Reset
 
         Running = 1, // Actively running and ticking
         Waiting = 2, // Waiting but still ticking
-        Suspended = 3, // Waiting for children, not ticking
+        Yield = 3, // Retry again in the same frame
+        Suspended = 4, // Waiting for children, not ticking
 
-        Succeeded = 4, // Result: success
-        Failed = 5, // Result: failure
-        Interrupted = 6, // Result: interrupted
+        Succeeded = 5, // Result: success
+        Failed = 6, // Result: failure
+        Interrupted = 7, // Result: interrupted
 
     }
 
@@ -398,10 +472,13 @@ namespace Spookline.SPC.Conscript {
 
         public static bool HasTerminated(this NodeState state) => state > NodeState.Suspended;
 
+        public static bool HasTerminatedNegative(this NodeState state) =>
+            state is NodeState.Failed or NodeState.Interrupted;
+
         public static bool IsActive(this NodeState state) =>
             state is > NodeState.Uninitialized and < NodeState.Succeeded;
 
-        public static bool IsTicking(this NodeState state) => state is NodeState.Running or NodeState.Waiting;
+        public static bool IsTicking(this NodeState state) => state is NodeState.Running or NodeState.Waiting or NodeState.Yield;
 
     }
 }
