@@ -1,17 +1,22 @@
 using System;
+using System.Linq;
 using UnityEngine;
 
 namespace Spookline.SPC.Conscript.Nodes {
-
-
-    public class TimeoutNode : ConscriptNode {
+    public class TimeoutNode : CollectionConscriptNode {
 
         public float timeout;
         private float _startTime;
-        public ConscriptNode Child { get; set; }
+
+        public TimeoutNode(float timeout) {
+            this.timeout = timeout;
+        }
+
+        protected override int MaxCount => 1;
 
         protected override void Initialize() {
-            children.Add(Child);
+            var child = children.FirstOrDefault();
+            if (child == null) throw new Exception("TimeoutNode must have exactly one child.");
             base.Initialize();
         }
 
@@ -20,17 +25,19 @@ namespace Spookline.SPC.Conscript.Nodes {
             _startTime = 0;
         }
 
-        protected override NodeState OnBegin() {
+        protected override NodeStatus OnBegin() {
             _startTime = Time.time;
-            Schedule(Child);
-            return NodeState.Waiting;
+            Schedule(children.First());
+            return NodeStatus.Waiting;
         }
 
-        protected override NodeState OnUpdate() {
-            if (Time.time - _startTime > timeout) return NodeState.Interrupted;
-            if (TickChild(Child).HasTerminated()) return Child.State;
-            return NodeState.Waiting;
+        protected override NodeStatus OnUpdate() {
+            if (Time.time - _startTime > timeout) return NodeStatus.Interrupted;
+            var child = children.First();
+            if (Continue(child).HasTerminated()) return child.Status;
+            return NodeStatus.Waiting;
         }
+
     }
 
     public class WaitNode : ConscriptNode {
@@ -47,14 +54,14 @@ namespace Spookline.SPC.Conscript.Nodes {
             _startTime = 0;
         }
 
-        protected override NodeState OnBegin() {
+        protected override NodeStatus OnBegin() {
             _startTime = Time.time;
-            return NodeState.Waiting;
+            return NodeStatus.Running;
         }
 
-        protected override NodeState OnUpdate() {
-            if (Time.time - _startTime > waitTime) return NodeState.Succeeded;
-            return NodeState.Waiting;
+        protected override NodeStatus OnUpdate() {
+            if (Time.time - _startTime > waitTime) return NodeStatus.Succeeded;
+            return NodeStatus.Running;
         }
 
     }
@@ -71,28 +78,8 @@ namespace Spookline.SPC.Conscript.Nodes {
             condition = () => constant;
         }
 
-        protected override NodeState OnBegin() {
-            return condition() ? NodeState.Succeeded : NodeState.Failed;
-        }
-
-    }
-
-    public class Test : FlowScope {
-
-        public void T() {
-
-            new Condition {
-                Observers = {
-                    [Observe.None] = new SimpleCondition(true),
-                    [Observe.Abort] = new WaitNode(2f),
-                    [Observe.Interrupt] = new WaitNode(3f)
-                },
-                Child = new SimpleCondition(true)
-            };
-
-            new Sequence {
-                new TimeoutNode()
-            };
+        protected override NodeStatus OnBegin() {
+            return condition() ? NodeStatus.Succeeded : NodeStatus.Failed;
         }
 
     }

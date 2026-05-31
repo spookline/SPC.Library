@@ -1,2 +1,3 @@
 Cleaver: #ffb13dff
+Conscript: #8df783ff
 Core: #4d58ffff

@@ -1,5 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using HELIX.Widgets.Universal;
+using Spookline.SPC.Conscript.UI;
 
 namespace Spookline.SPC.Conscript.Nodes {
     public abstract partial class FlowScope {
@@ -26,26 +29,34 @@ namespace Spookline.SPC.Conscript.Nodes {
                 base.Initialize();
             }
 
-            protected override NodeState OnBegin() {
+            protected internal override NodeTemplate BuildWidget() {
+                return new NodeTemplate(this) {
+                    content = new HText("Condition"),
+                    inline = Observers.Nodes.Select(x => x.BuildWidget()).ToList(),
+                    sequence = new List<NodeTemplate> { Child.BuildWidget() }
+                };
+            }
+
+            protected override NodeStatus OnBegin() {
                 Observers.Reset();
                 Child.Reset();
                 var matches = Observers.CheckPreconditions(this);
-                return matches ? NodeState.Waiting : NodeState.Failed;
+                return matches ? NodeStatus.Waiting : NodeStatus.Failed;
             }
 
             protected override void OnEnd() { }
 
-            protected override NodeState OnUpdate() {
+            protected override NodeStatus OnUpdate() {
                 var conditions = Observers.CheckRunningConditions(this);
                 if (conditions) {
-                    if (Child != null) return ScheduleImmediate(Child);
-                    return NodeState.Succeeded;
+                    if (Child != null) return Run(Child);
+                    return NodeStatus.Succeeded;
                 }
 
-                return NodeState.Failed;
+                return NodeStatus.Failed;
             }
 
-            public override bool WillInterruptNode(ConscriptNode node) {
+            protected override bool WillInterruptNode(ConscriptNode node) {
                 return Observers.CheckInterruptConditions(this);
             }
 
@@ -83,7 +94,7 @@ namespace Spookline.SPC.Conscript.Nodes {
                     var opts = _flags[i];
                     if (!opts.HasFlag(Observe.Guard)) continue;
                     var node = _nodes[i];
-                    var result = parent.ScheduleImmediateInternal(node);
+                    var result = parent.Run(node);
                     if (result.HasTerminatedNegative()) return false;
                 }
 
@@ -95,7 +106,7 @@ namespace Spookline.SPC.Conscript.Nodes {
                     var opts = _flags[i];
                     if (!opts.HasFlag(Observe.Abort)) continue;
                     var node = _nodes[i];
-                    var result = parent.ScheduleImmediateInternal(node);
+                    var result = parent.Run(node);
                     if (result.HasTerminatedNegative()) return false;
                 }
 
@@ -107,7 +118,7 @@ namespace Spookline.SPC.Conscript.Nodes {
                     var opts = _flags[i];
                     if (!opts.HasFlag(Observe.Interrupt)) continue;
                     var node = _nodes[i];
-                    var result = parent.ScheduleImmediateInternal(node);
+                    var result = parent.Run(node);
                     if (result.HasTerminatedNegative()) return false;
                 }
 

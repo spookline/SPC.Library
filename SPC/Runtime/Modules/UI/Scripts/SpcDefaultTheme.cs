@@ -12,7 +12,7 @@ namespace Spookline.SPC.UI {
   public partial class SpcDefaultTheme : BaseElement {
 
     private readonly ThemeProviderElement _themeProvider;
-    private bool _dark;
+    private bool _dark = true;
     private bool _isEditor;
     private Color _seedColor = Color.blue;
 
@@ -54,9 +54,9 @@ namespace Spookline.SPC.UI {
 
     public static List<ThemeComponent> Generate(Color seedColor, bool dark, bool isEditor) {
       var colors = PrimitiveColorScheme.From(seedColor, dark ? Brightness.Dark : Brightness.Light);
-      var spacing = isEditor ? new PrimitiveSpacingScheme { factor = 1f } : PrimitiveSpacingScheme.Default;
-      var typography = isEditor ? new PrimitiveTypographyScheme { factor = 1f } : PrimitiveTypographyScheme.Default;
-      var radius = isEditor ? new PrimitiveRadiusScheme { factor = 1f } : PrimitiveRadiusScheme.Default;
+      var spacing = isEditor ? new PrimitiveSpacingScheme { factor = 0.75f } : PrimitiveSpacingScheme.Default;
+      var typography = isEditor ? new PrimitiveTypographyScheme { factor = 0.85f, lineHeightFactor = 1.1f } : PrimitiveTypographyScheme.Default;
+      var radius = isEditor ? new PrimitiveRadiusScheme { factor = 0.75f } : PrimitiveRadiusScheme.Default;
       return new List<ThemeComponent> {
         new PrimitiveBaseThemeComponent {
           colors = colors,
