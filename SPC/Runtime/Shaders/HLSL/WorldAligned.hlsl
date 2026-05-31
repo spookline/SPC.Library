@@ -18,7 +18,8 @@ float3 TransformTriplanarNormalUnity(
     float selection,
     float blendSign)
 {
-    tangentNormal.xy *= blendSign;
+    // tangentNormal.xy *= blendSign;
+    // We ignore the blend sign since unity also doesn't seem to use it
     uint index = (uint)selection;
 
     float3 swizzledNormals;
@@ -27,7 +28,7 @@ float3 TransformTriplanarNormalUnity(
     {
         swizzledNormals =
             float3(
-                tangentNormal.yx + normalWS.zy,
+                tangentNormal.xy + normalWS.zy,
                 tangentNormal.z * normalWS.x
             ).zyx;
     }
@@ -82,18 +83,18 @@ void DeriveTriplanarCoordinates_float(
     float3 pos = Position;
     pos *= Tiling;
 
-    UV_X = pos.yz;
+    BlendWeights = TriplanarBlendCoefficients(Normal, Sharpness);
+    BlendSigns = sign(Normal);
+
+    UV_X = pos.zy;
     UV_Y = pos.xz;
     UV_Z = pos.xy;
 
     float3 ddxPos = ddx(pos);
     float3 ddyPos = ddy(pos);
-    DD_UV_X = float4(ddxPos.yz, ddyPos.yz);
+    DD_UV_X = float4(ddxPos.zy, ddyPos.zy);
     DD_UV_Y = float4(ddxPos.xz, ddyPos.xz);
     DD_UV_Z = float4(ddxPos.xy, ddyPos.xy);
-
-    BlendWeights = TriplanarBlendCoefficients(Normal, Sharpness);
-    BlendSigns = sign(Normal);
 }
 
 void TriplanarSelectDominantAxis_float(
@@ -109,11 +110,23 @@ void TriplanarSelectDominantAxis_float(
     out float2 DDY
 )
 {
-    BlendWeights = saturate(BlendWeights);
+    float3 noise3;
+    noise3.x = Dither;
+    noise3.y = frac(Dither * 2.11377);
+    noise3.z = frac(Dither * 3.57143);
+    float3 noisyWeights = saturate(BlendWeights) + (noise3 - 0.5) * 1;
 
-    uint i;
-    i = (BlendWeights.x - Dither > BlendWeights.y) ? 0 : 1;
-    i = (BlendWeights.z - Dither > max(BlendWeights.x, BlendWeights.y)) ? 2 : i;
+    uint i = 0;
+    float maxWeight = noisyWeights.x;
+    if (noisyWeights.y > maxWeight)
+    {
+        i = 1;
+        maxWeight = noisyWeights.y;
+    }
+    if (noisyWeights.z > maxWeight)
+    {
+        i = 2;
+    }
 
     Sign = BlendSigns[i];
     Axis = i;

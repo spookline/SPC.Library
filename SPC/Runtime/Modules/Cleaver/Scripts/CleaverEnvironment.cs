@@ -167,6 +167,7 @@ namespace Spookline.SPC.Cleaver {
                     comp.layerMask = GetMask(ByteMask.World);
                     comp.collectObjects = CollectObjects.Volume;
                     comp.size = worldBounds;
+                    comp.buildHeightMesh = true;
                 }
             );
         }

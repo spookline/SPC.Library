@@ -596,7 +596,7 @@
                 "m_Node": {
                     "m_Id": "279ee03a4dae48fa90149368851a007a"
                 },
-                "m_SlotId": -475644575
+                "m_SlotId": -1319352312
             }
         },
         {
@@ -2479,8 +2479,8 @@
     "m_ObjectId": "12042e1bd8c54b5f9f08caf4495077ea",
     "m_Title": "Switch Debug Mode Flags",
     "m_Position": {
-        "x": 677.999755859375,
-        "y": -390.00006103515627
+        "x": 678.0,
+        "y": -390.0
     }
 }
 
@@ -2578,7 +2578,7 @@
     "m_ObjectId": "148b35e64e7041a69e490e680f1bbcb7",
     "m_Title": "Derive Triplanar Sampling Arguments",
     "m_Position": {
-        "x": -2443.0,
+        "x": -2442.999755859375,
         "y": -475.00006103515627
     }
 }
@@ -3386,7 +3386,7 @@
             "m_Id": "0abe8f8632e04aa1a4c14a31f793c018"
         },
         {
-            "m_Id": "f418ce6b3615438fa31b179a3d660eeb"
+            "m_Id": "4b76b2b2921044168ae1da4f4deea6d3"
         },
         {
             "m_Id": "ee1c9a9190234bffa44420cc89b5b9a1"
@@ -3422,7 +3422,9 @@
         "57a93efe-143a-4670-8c46-13f73edd0ec6",
         "5b6ae989-dea8-438a-a841-066e43ba481d",
         "e1e40aa6-b3a6-42f2-9459-aa02580b9bf7",
-        "fd1a0834-b42f-43e6-ba5a-e46fc0dbbe32"
+        "fd1a0834-b42f-43e6-ba5a-e46fc0dbbe32",
+        "6e86d947-e0dc-4f8b-a9ca-c9e3262897f5",
+        "0280e332-ef6d-40c1-971f-cce2c05bd111"
     ],
     "m_PropertyIds": [
         -661777788,
@@ -3433,7 +3435,9 @@
         549761398,
         1806617802,
         1445456844,
-        -475644575
+        -475644575,
+        928242452,
+        -1319352312
     ],
     "m_Dropdowns": [],
     "m_DropdownSelectedEntries": []
@@ -3495,10 +3499,10 @@
         "m_Expanded": true,
         "m_Position": {
             "serializedVersion": "2",
-            "x": -2266.000244140625,
-            "y": 56.0000114440918,
+            "x": -2266.0,
+            "y": 56.0,
             "width": 208.0,
-            "height": 279.0000305175781
+            "height": 303.0
         }
     },
     "m_Slots": [
@@ -3765,10 +3769,10 @@
         "m_Expanded": true,
         "m_Position": {
             "serializedVersion": "2",
-            "x": -970.0,
-            "y": 976.0,
+            "x": -970.0000610351563,
+            "y": 971.0000610351563,
             "width": 148.0,
-            "height": 34.0
+            "height": 33.99993896484375
         }
     },
     "m_Slots": [
@@ -4669,6 +4673,22 @@
     "m_CustomColors": {
         "m_SerializableColors": []
     }
+}
+
+{
+    "m_SGVersion": 0,
+    "m_Type": "UnityEditor.ShaderGraph.Vector1MaterialSlot",
+    "m_ObjectId": "4b76b2b2921044168ae1da4f4deea6d3",
+    "m_Id": -1319352312,
+    "m_DisplayName": "Dither",
+    "m_SlotType": 0,
+    "m_Hidden": false,
+    "m_ShaderOutputName": "_Dither",
+    "m_StageCapability": 3,
+    "m_Value": 0.0,
+    "m_DefaultValue": 0.0,
+    "m_Labels": [],
+    "m_LiteralMode": false
 }
 
 {
@@ -6014,7 +6034,7 @@
     "m_ObjectId": "6433a36c1d4b4a9ebf0c525f0ccc366f",
     "m_Title": "Select Spacial Inputs",
     "m_Position": {
-        "x": -3402.0,
+        "x": -3401.999755859375,
         "y": 634.9999389648438
     }
 }
@@ -7158,9 +7178,9 @@
         "m_Expanded": true,
         "m_Position": {
             "serializedVersion": "2",
-            "x": -731.0,
-            "y": 1208.0001220703125,
-            "width": 147.99993896484376,
+            "x": -656.9998779296875,
+            "y": 1212.0,
+            "width": 147.9998779296875,
             "height": 34.0
         }
     },
@@ -7364,8 +7384,8 @@
     "m_ObjectId": "8bb84e59efeb44c09f842abf47f0f09e",
     "m_Title": "Sample Normals",
     "m_Position": {
-        "x": -1434.0,
-        "y": 499.9998779296875
+        "x": -1434.0001220703125,
+        "y": 500.0
     }
 }
 
@@ -10965,8 +10985,8 @@
     "m_ObjectId": "ee8203a90e0d4e4fbfaee62db15e2842",
     "m_Title": "Sample Base Color",
     "m_Position": {
-        "x": -1033.000244140625,
-        "y": -470.00006103515627
+        "x": -1033.0,
+        "y": -469.9999694824219
     }
 }
 
@@ -11198,22 +11218,6 @@
         "w": 0.0
     },
     "m_Labels": []
-}
-
-{
-    "m_SGVersion": 0,
-    "m_Type": "UnityEditor.ShaderGraph.Vector1MaterialSlot",
-    "m_ObjectId": "f418ce6b3615438fa31b179a3d660eeb",
-    "m_Id": -475644575,
-    "m_DisplayName": "Dither",
-    "m_SlotType": 0,
-    "m_Hidden": false,
-    "m_ShaderOutputName": "_Dither",
-    "m_StageCapability": 3,
-    "m_Value": 0.0,
-    "m_DefaultValue": 0.0,
-    "m_Labels": [],
-    "m_LiteralMode": false
 }
 
 {
