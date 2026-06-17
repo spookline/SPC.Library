@@ -166,7 +166,10 @@ namespace Spookline.SPC.Actor.FirstPerson {
 
             if (_outOfBreathTimer <= 0) {
                 _outOfBreathTimer = staminaAttachment.outOfBreathTime;
-                new PawnStaminaOutOfBreathEvt().Raise();
+                new PawnStaminaOutOfBreathEvt {
+                    Pawn = Possessed,
+                    Possessor = this
+                }.Raise();
             }
 
             IsSprinting = false;
