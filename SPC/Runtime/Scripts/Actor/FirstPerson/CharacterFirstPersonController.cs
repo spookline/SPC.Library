@@ -1,4 +1,6 @@
-﻿using Sirenix.OdinInspector;
+﻿using System;
+using Sirenix.OdinInspector;
+using Spookline.SPC.Cameras;
 using Spookline.SPC.Events;
 using Spookline.SPC.Ext;
 using UnityEngine;
@@ -37,6 +39,14 @@ namespace Spookline.SPC.Actor.FirstPerson {
         private float _outOfBreathTimer;
         private bool _hasLanded;
         private bool _lastSprint;
+        
+        private FovSource _fovSource;
+        
+
+        protected override void OnDisable() {
+            base.OnDisable();
+            _fovSource?.Dispose();
+        }
 
         private void Update() {
             if (!Possessed) return;

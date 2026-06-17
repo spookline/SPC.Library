@@ -6,7 +6,7 @@ namespace Spookline.SPC.Actor.FirstPerson {
     public partial class CharacterFirstPersonController {
 
         public Pawn Possessed { get; private set; }
-        
+
         private bool IsGrounded {
             get => _movementStateAttachmentAccessor.Value.IsGrounded;
             set => _movementStateAttachmentAccessor.Value.IsGrounded = value;
@@ -49,6 +49,9 @@ namespace Spookline.SPC.Actor.FirstPerson {
             _staminaAttachmentAccessor = pawnToPossess.GetAccessor<StaminaAttachment>();
             Possessed = pawnToPossess;
             camera.Follow = Possessed.eyeTransform;
+            _fovSource = Ext.AddFovSource(new FovSource(() => IsSprinting,
+                _movementAttachmentAccessor.Value.sprintFovMultiplier,
+                speed: _movementAttachmentAccessor.Value.sprintFovChangeSpeed, mode: FovValueMode.Multiplier));
             Possessed.OnPossessed(this);
         }
 

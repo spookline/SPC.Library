@@ -1,14 +1,10 @@
 ﻿using System;
 using Unity.Cinemachine;
-using UnityEngine;
 
-namespace Spookline.SPC.Cameras
-{
+namespace Spookline.SPC.Cameras {
     [Serializable]
     public class CinemachineCameraProvider : FovManager.ICameraProvider {
 
-        [Tooltip(
-            "First camera in the array will be used as the base FOV provider. All cameras should ideally have the same base FOV for consistent results.")]
         public CinemachineCamera[] cameras;
 
         public float baseFov = 60f;
@@ -18,7 +14,7 @@ namespace Spookline.SPC.Cameras
         public float BaseFov => baseFov;
 
         public float Fov {
-            get => BaseCamera != null ? BaseCamera.Lens.FieldOfView : 60f;
+            get => BaseCamera != null ? BaseCamera.Lens.FieldOfView : baseFov;
             set {
                 foreach (var cam in cameras) {
                     cam.Lens.FieldOfView = value;
