@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Cysharp.Threading.Tasks;
+using HELIX.Diagnostics;
 using HELIX.Widgets;
 using HELIX.Widgets.Diagnostics;
 using HELIX.Widgets.Modifiers;

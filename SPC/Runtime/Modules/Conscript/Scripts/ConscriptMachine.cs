@@ -1,5 +1,5 @@
 using System.Collections.Generic;
-using HELIX.Widgets.Diagnostics;
+using HELIX.Diagnostics;
 using Spookline.SPC.Conscript.UI;
 using UnityEngine;
 
@@ -96,8 +96,11 @@ namespace Spookline.SPC.Conscript {
             } else {
                 RecordingStart = 0;
             }
+
             Recording = record;
-            foreach (var node in Nodes) { node.SetRecording(record); }
+            foreach (var node in Nodes) {
+                node.SetRecording(record);
+            }
         }
 
         internal void NotifyYield() {

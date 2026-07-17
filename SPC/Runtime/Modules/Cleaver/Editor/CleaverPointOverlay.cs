@@ -1,12 +1,10 @@
-using System.Collections.Generic;
-using HELIX.Widgets.Diagnostics;
+using HELIX.Diagnostics;
 using Sirenix.OdinInspector;
 using Sirenix.OdinInspector.Editor;
 using Spookline.SPC.Cleaver.Points;
 using UnityEditor;
 using UnityEditor.EditorTools;
 using UnityEditor.Overlays;
-using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.UIElements;
 
