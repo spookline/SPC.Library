@@ -119,6 +119,7 @@ namespace Spookline.SPC.UI {
           color = colors.surface.onMain,
           fontSize = typo.FontSize2
         },
+        alignment = Alignment.CenterLeft,
         constraints = BoxConstraints.Tight(StyleKeyword.Auto, typo.LineHeight2),
         padding = EdgeInsets.Symmetric(spacing.Space2, 0),
         layers = new SubstanceBuilder(provider).Outline().Build()

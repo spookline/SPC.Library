@@ -2,8 +2,10 @@ using System;
 using System.Collections.Generic;
 using Cysharp.Threading.Tasks;
 using HELIX.Diagnostics;
+using HELIX.Extensions;
 using HELIX.Widgets;
 using HELIX.Widgets.Diagnostics;
+using HELIX.Widgets.Elements;
 using HELIX.Widgets.Modifiers;
 using HELIX.Widgets.Universal;
 using HELIX.Widgets.Universal.Controllers;
@@ -48,7 +50,10 @@ namespace Spookline.SPC.UI {
       public override void InitState() {
         controller = AddDisposable(new TextEditingController());
         controller.onChanged += OnChanged;
-        controller.onBeginEditing += () => { CommandSystem.Instance.Refresh(); };
+        controller.onBeginEditing += () => {
+          widget.cmdTextKey.Target.Element.Q<GenericTextInput>()?.Stretched();
+          CommandSystem.Instance.Refresh();
+        };
 
         mount.Element.RegisterCallback<KeyDownEvent>(
           evt => {
