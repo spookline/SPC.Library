@@ -1,6 +1,6 @@
 {
   "name": "com.spookline.spc",
-  "version": "0.8.3",
+  "version": "0.8.4",
   "displayName": "Spookline Core",
   "dependencies": {
     "com.unity.addressables": "2.3.16",

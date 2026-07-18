@@ -38,9 +38,10 @@ namespace Spookline.SPC.Cleaver {
         }
 
         private void OnGizmos(ref GizmoEvt args) {
-            var draw = args.drawer;
-            using (draw.Scope(Color.red, Matrix4x4.TRS(position, rotation, Vector3.one))) {
-                draw.SphereSection(Vector3.zero, Vector3.forward, viewDistance, viewAngleDegrees);
+            if (args.DrawingPass(out var draw)) {
+                using (draw.Scope(Color.red, Matrix4x4.TRS(position, rotation, Vector3.one))) {
+                    draw.SphereSection(Vector3.zero, Vector3.forward, viewDistance, viewAngleDegrees);
+                }
             }
         }
 
