@@ -41,6 +41,7 @@ namespace Spookline.SPC.Actor.FirstPerson {
         private bool _lastSprint;
         
         private FovSource _fovSource;
+        private bool _isOutOfBreath;
         
 
         protected override void OnDisable() {
@@ -172,17 +173,22 @@ namespace Spookline.SPC.Actor.FirstPerson {
                 }
             }
 
-            if (staminaAttachment.Stamina > 0) return;
-
-            if (_outOfBreathTimer <= 0) {
-                _outOfBreathTimer = staminaAttachment.outOfBreathTime;
-                new PawnStaminaOutOfBreathEvt {
-                    Pawn = Possessed,
-                    Possessor = this
-                }.Raise();
+            if (staminaAttachment.Stamina > 0) {
+                _isOutOfBreath = false;
+                return;
             }
 
             IsSprinting = false;
+            
+            if(_isOutOfBreath) return;
+
+            _isOutOfBreath = true;
+            _outOfBreathTimer = staminaAttachment.outOfBreathTime;
+
+            new PawnStaminaOutOfBreathEvt {
+                Pawn = Possessed,
+                Possessor = this
+            }.Raise();
         }
 
         private void LateUpdate() {
