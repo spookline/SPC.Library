@@ -1,6 +1,4 @@
-﻿using System;
-using Sirenix.OdinInspector;
-using Spookline.SPC.Cameras;
+﻿using Sirenix.OdinInspector;
 using Spookline.SPC.Events;
 using Spookline.SPC.Ext;
 using UnityEngine;
@@ -8,7 +6,8 @@ using UnityEngine.InputSystem;
 
 namespace Spookline.SPC.Actor.FirstPerson {
     [HideMonoScript]
-    public partial class CharacterFirstPersonController : SpookBehaviour<CharacterFirstPersonController>, IPossessor, IHideScriptSceneIcon {
+    public partial class CharacterFirstPersonController : SpookBehaviour<CharacterFirstPersonController>, IPossessor,
+        IHideScriptSceneIcon {
 
         [TabGroup("Ground")]
         public LayerMask groundLayer;
@@ -39,10 +38,10 @@ namespace Spookline.SPC.Actor.FirstPerson {
         private float _outOfBreathTimer;
         private bool _hasLanded;
         private bool _lastSprint;
-        
+
         private FovSource _fovSource;
         private bool _isOutOfBreath;
-        
+
 
         protected override void OnDisable() {
             base.OnDisable();
@@ -152,6 +151,8 @@ namespace Spookline.SPC.Actor.FirstPerson {
             var velocity = _horizontalVelocity;
             velocity.y = _verticalVelocity;
 
+            if (!controller || !controller.enabled) return;
+
             controller.Move(velocity * Time.deltaTime);
         }
 
@@ -179,8 +180,8 @@ namespace Spookline.SPC.Actor.FirstPerson {
             }
 
             IsSprinting = false;
-            
-            if(_isOutOfBreath) return;
+
+            if (_isOutOfBreath) return;
 
             _isOutOfBreath = true;
             _outOfBreathTimer = staminaAttachment.outOfBreathTime;
