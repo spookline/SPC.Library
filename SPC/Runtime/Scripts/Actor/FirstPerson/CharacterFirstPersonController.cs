@@ -41,6 +41,7 @@ namespace Spookline.SPC.Actor.FirstPerson {
 
         private FovSource _fovSource;
         private bool _isOutOfBreath;
+        private bool _lastCrouched;
 
 
         protected override void OnDisable() {
@@ -90,6 +91,16 @@ namespace Spookline.SPC.Actor.FirstPerson {
             }
 
             HandleStamina();
+
+            if (_lastCrouched != IsCrouching) {
+                var evt = new PawnCrouchedChangedEvt {
+                    IsCrouched = IsCrouching
+                }.Raise();
+                if (evt.IsCancelled) {
+                    IsCrouching = _lastCrouched;
+                }
+                _lastCrouched = IsCrouching;
+            }
 
             if (_lastSprint != IsSprinting) {
                 var evt = new PawnSprintingChangedEvt {
