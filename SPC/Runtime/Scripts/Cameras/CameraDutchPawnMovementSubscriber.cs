@@ -1,5 +1,4 @@
 ﻿using Spookline.SPC.Actor;
-using UnityEngine;
 
 namespace Spookline.SPC.Cameras {
     public class CameraDutchPawnMovementSubscriber : PawnMovementSubscriber<CameraDutchPawnMovementSubscriber> {

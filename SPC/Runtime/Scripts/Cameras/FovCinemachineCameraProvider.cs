@@ -3,7 +3,7 @@ using Unity.Cinemachine;
 
 namespace Spookline.SPC.Cameras {
     [Serializable]
-    public class CinemachineCameraProvider : FovManager.ICameraProvider {
+    public class FovCinemachineCameraProvider : FovManager.ICameraProvider {
 
         public CinemachineCamera[] cameras;
 

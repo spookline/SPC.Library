@@ -3,7 +3,7 @@
 namespace Spookline.SPC.Cameras
 {
     [Serializable]
-    public class UnityCameraProvider : FovManager.ICameraProvider {
+    public class FovUnityCameraProvider : FovManager.ICameraProvider {
 
         public UnityEngine.Camera camera;
 
