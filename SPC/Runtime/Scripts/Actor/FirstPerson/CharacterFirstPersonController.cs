@@ -64,6 +64,7 @@ namespace Spookline.SPC.Actor.FirstPerson {
             var controller = _characterAttachmentAccessor.Value.controller;
 
             Input = moveInput.action.ReadValue<Vector2>();
+            Debug.Log("Setting input to: " + Input);
             IsSprinting = sprintInput.action.IsPressed();
             IsCrouching = crouchInput.action.IsPressed();
 
@@ -249,7 +250,10 @@ namespace Spookline.SPC.Actor.FirstPerson {
             if (args.ScreenOverlayPass(out var screen)) {
                 screen.Global()
                     .Field("Velocity", Velocity)
-                    .Field("Speed", CurrentSpeed);
+                    .Field("Speed", CurrentSpeed)
+                    .Field("-----", "-----")
+                    .Field("IsGrounded", IsGrounded.ToString())
+                    .Field("Input", Input);
             }
         }
 
