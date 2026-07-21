@@ -6,11 +6,10 @@ using Spookline.SPC.Ext;
 using UnityEngine;
 
 namespace Spookline.SPC.Actor {
-
     [HideMonoScript]
     [AddComponentMenu("AI/Pawn")]
     public sealed class Pawn : AttachmentSpookBehaviour<Pawn, IPawnAttachment> {
-        
+
         public Transform eyeTransform;
         public Transform mainTransform;
 
@@ -46,11 +45,8 @@ namespace Spookline.SPC.Actor {
         }
 
     }
-    
-    public interface IPawnAttachment : IAttachment {
-        
-        
-    }
+
+    public interface IPawnAttachment : IAttachment { }
 
     public interface IPossessor {
 
@@ -60,18 +56,27 @@ namespace Spookline.SPC.Actor {
 
     }
 
-    public abstract class PawnEvt<T> : Evt<T> where T : PawnEvt<T> {
+    public interface IPawnEvt {
+
+        public Pawn Pawn { get; set; }
+
+        public IPossessor Possessor { get; set; }
+
+    }
+
+    public struct PawnPossessedEvt : Evt<PawnPossessedEvt>, IPawnEvt {
+
+        public bool IsCancelled { get; set; }
+
+        public Pawn Pawn { get; set; }
+        public IPossessor Possessor { get; set;  }
+
+    }
+
+    public struct PawnExorcisedEvt : Evt<PawnExorcisedEvt>, IPawnEvt {
 
         public Pawn Pawn { get; set; }
         public IPossessor Possessor { get; set; }
 
     }
-
-    public class PawnPossessedEvt : PawnEvt<PawnPossessedEvt> {
-
-        public bool IsCancelled { get; set; } = false;
-
-    }
-
-    public class PawnExorcisedEvt : PawnEvt<PawnExorcisedEvt> { }
 }

@@ -28,9 +28,8 @@ namespace Spookline.SPC.Actor.FirstPerson {
         public InputActionReference sprintInput;
         [TabGroup("Input")]
         public InputActionReference lookInput;
-
-        [TabGroup("Synchronization")]
-        public bool syncMainTransform = true;
+        
+        public bool rotateMainTransform = true;
 
         private float _verticalVelocity;
         private Vector3 _horizontalVelocity;
@@ -38,6 +37,9 @@ namespace Spookline.SPC.Actor.FirstPerson {
         private float _outOfBreathTimer;
         private bool _hasLanded;
         private bool _lastSprint;
+        private Vector3 _initialEyesPosition;
+        private Vector3 _initialCharacterControllerCenter;
+        private float _initialCharacterControllerHeight;
 
         private FovSource _fovSource;
         private bool _isOutOfBreath;
@@ -60,7 +62,7 @@ namespace Spookline.SPC.Actor.FirstPerson {
 
             HandleCameraRotationInput();
 
-            if (syncMainTransform) {
+            if (rotateMainTransform) {
                 mainTransform.rotation = Quaternion.Euler(0f, _yaw, 0f);
             }
 
@@ -91,16 +93,20 @@ namespace Spookline.SPC.Actor.FirstPerson {
             }
 
             HandleStamina();
-
-            if (_lastCrouched != IsCrouching) {
-                var evt = new PawnCrouchedChangedEvt {
-                    IsCrouched = IsCrouching
-                }.Raise();
-                if (evt.IsCancelled) {
-                    IsCrouching = _lastCrouched;
+            if (_movementAttachmentAccessor.Value.crouchEnabled) {
+                if (_lastCrouched != IsCrouching) {
+                    var evt = new PawnCrouchedChangedEvt {
+                        IsCrouched = IsCrouching
+                    }.Raise();
+                    if (evt.IsCancelled) {
+                        IsCrouching = _lastCrouched;
+                    }
+                    _lastCrouched = IsCrouching;
                 }
-                _lastCrouched = IsCrouching;
+                HandleCrouch();
             }
+
+            
 
             if (_lastSprint != IsSprinting) {
                 var evt = new PawnSprintingChangedEvt {
@@ -125,8 +131,8 @@ namespace Spookline.SPC.Actor.FirstPerson {
             var direction = Vector3.ClampMagnitude(forward * Input.y + right * Input.x, 1f);
 
             var desiredSpeed = _movementAttachmentAccessor.Value.moveSpeed;
-            if (IsSprinting && !IsCrouching) desiredSpeed *= _movementAttachmentAccessor.Value.sprintSpeedMultiplier;
-            if (IsCrouching) desiredSpeed *= _movementAttachmentAccessor.Value.crouchSpeedMultiplier;
+            if (IsSprinting && !IsCrouching && _movementAttachmentAccessor.Value.sprintEnabled) desiredSpeed *= _movementAttachmentAccessor.Value.sprintSpeedMultiplier;
+            if (IsCrouching && _movementAttachmentAccessor.Value.crouchEnabled) desiredSpeed *= _movementAttachmentAccessor.Value.crouchSpeedMultiplier;
 
             var targetVelocity = direction * desiredSpeed;
 
@@ -151,8 +157,8 @@ namespace Spookline.SPC.Actor.FirstPerson {
                 _verticalVelocity = -2f;
             }
 
-            if (IsGrounded && jumpPressed) {
-                var absGravity = Mathf.Abs(gravity);
+            if (IsGrounded && jumpPressed && _movementAttachmentAccessor.Value.jumpEnabled) {
+                var absGravity = Mathf.Abs(gravity * _movementAttachmentAccessor.Value.jumpGravityMultiplier);
                 _verticalVelocity = Mathf.Sqrt(2 * _movementAttachmentAccessor.Value.jumpHeight * absGravity);
                 new PawnJumpEvt().Raise();
             }
@@ -201,6 +207,21 @@ namespace Spookline.SPC.Actor.FirstPerson {
                 Pawn = Possessed,
                 Possessor = this
             }.Raise();
+        }
+
+        private void HandleCrouch() {
+            var nextEyesPosition = IsCrouching ? _initialEyesPosition + _movementAttachmentAccessor.Value.crouchEyesOffset : _initialEyesPosition;
+            Possessed.eyeTransform.localPosition = Vector3.Lerp(Possessed.eyeTransform.localPosition, nextEyesPosition, Time.deltaTime * _movementAttachmentAccessor.Value.crouchLerpSpeed);
+
+            var targetHeight = !IsCrouching
+                ? _initialCharacterControllerHeight
+                : _initialCharacterControllerHeight * _movementAttachmentAccessor.Value.crouchColliderSizeReduction;
+            var heightDiff = _initialCharacterControllerHeight - targetHeight;
+            var targetCenter = IsCrouching ? _initialCharacterControllerCenter - Vector3.up * (heightDiff * 0.5f) : _initialCharacterControllerCenter;
+
+            var controller = _characterAttachmentAccessor.Value.controller;
+            controller.height = Mathf.Lerp(controller.height, targetHeight, Time.deltaTime * _movementAttachmentAccessor.Value.crouchLerpSpeed);
+            controller.center = Vector3.Lerp(controller.center, targetCenter, Time.deltaTime * _movementAttachmentAccessor.Value.crouchLerpSpeed);
         }
 
         private void LateUpdate() {

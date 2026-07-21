@@ -49,9 +49,14 @@ namespace Spookline.SPC.Actor.FirstPerson {
             _staminaAttachmentAccessor = pawnToPossess.GetAccessor<StaminaAttachment>();
             Possessed = pawnToPossess;
             camera.Follow = Possessed.eyeTransform;
-            _fovSource = Ext.AddFovSource(new FovSource(() => IsSprinting,
-                _movementAttachmentAccessor.Value.sprintFovMultiplier,
-                speed: _movementAttachmentAccessor.Value.sprintFovChangeSpeed, mode: FovValueMode.Multiplier));
+            if (_movementAttachmentAccessor.Value.fovEnabled) {
+                _fovSource = Ext.AddFovSource(new FovSource(() => IsSprinting,
+                    _movementAttachmentAccessor.Value.sprintFovMultiplier,
+                    speed: _movementAttachmentAccessor.Value.sprintFovChangeSpeed, mode: FovValueMode.Multiplier));
+            }
+            _initialEyesPosition = Possessed.eyeTransform.localPosition;
+            _initialCharacterControllerCenter = _characterAttachmentAccessor.Value.controller.center;
+            _initialCharacterControllerHeight = _characterAttachmentAccessor.Value.controller.height;
             Possessed.OnPossessed(this);
         }
 
