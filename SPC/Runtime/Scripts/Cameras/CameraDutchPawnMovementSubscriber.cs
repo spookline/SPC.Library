@@ -9,16 +9,14 @@ namespace Spookline.SPC.Cameras {
 
         private void LateUpdate() {
             if (!IsStateAvailable || !CameraDutch.HasInstance) return;
-            if (!State.IsMoving) {
-                CameraDutch.Instance.Dutch(0f, dutchTransitionDuration);
-                return;
-            }
 
             var x = State.Input.x;
             if (x >= 0.4) {
                 CameraDutch.Instance.Dutch(-dutchAmount, dutchTransitionDuration);
-            } else if (x <= 0.4) {
+            } else if (x <= -0.4) {
                 CameraDutch.Instance.Dutch(dutchAmount, dutchTransitionDuration);
+            } else {
+                CameraDutch.Instance.Dutch(0, dutchTransitionDuration);
             }
         }
 
