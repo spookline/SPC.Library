@@ -14,6 +14,8 @@ namespace Spookline.SPC.Actor {
         
         public float CurrentSpeed { get; set; }
         
+        public Vector3 Velocity { get; set; }
+        
         public Quaternion LookDirection { get; set; }
         
         public Vector2 Input { get; set; }

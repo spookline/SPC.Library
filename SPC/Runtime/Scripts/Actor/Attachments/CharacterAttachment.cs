@@ -7,8 +7,7 @@ namespace Spookline.SPC.Actor.Attachments {
 
         public CharacterController controller;
         public float gravity = -9.81f;
-        public float acceleration = 200;
-        public float deceleration = 20;
+        
 
     }
 }

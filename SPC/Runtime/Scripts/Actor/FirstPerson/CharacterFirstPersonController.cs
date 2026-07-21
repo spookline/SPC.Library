@@ -1,4 +1,6 @@
-﻿using Sirenix.OdinInspector;
+﻿using System;
+using Sirenix.OdinInspector;
+using Spookline.SPC.Debugging;
 using Spookline.SPC.Events;
 using Spookline.SPC.Ext;
 using UnityEngine;
@@ -44,6 +46,11 @@ namespace Spookline.SPC.Actor.FirstPerson {
         private FovSource _fovSource;
         private bool _isOutOfBreath;
         private bool _lastCrouched;
+
+        private void Awake() {
+            On<GizmoEvt>().Do(OnGizmos);
+            On<CollectDebugFlagsEvt>().Do(evt => evt.Add("movement"));
+        }
 
 
         protected override void OnDisable() {
@@ -133,21 +140,20 @@ namespace Spookline.SPC.Actor.FirstPerson {
             var desiredSpeed = _movementAttachmentAccessor.Value.moveSpeed;
             if (IsSprinting && !IsCrouching && _movementAttachmentAccessor.Value.sprintEnabled) desiredSpeed *= _movementAttachmentAccessor.Value.sprintSpeedMultiplier;
             if (IsCrouching && _movementAttachmentAccessor.Value.crouchEnabled) desiredSpeed *= _movementAttachmentAccessor.Value.crouchSpeedMultiplier;
-
-            var targetVelocity = direction * desiredSpeed;
+            
+            CurrentSpeed = Mathf.Lerp(CurrentSpeed, desiredSpeed, _movementAttachmentAccessor.Value.speedChangeRate * Time.deltaTime);
+            
+            var targetVelocity = direction * CurrentSpeed;
 
             IsMoving = targetVelocity.sqrMagnitude > 0.001f;
 
-            var sharpness = IsMoving
-                ? _characterAttachmentAccessor.Value.acceleration
-                : _characterAttachmentAccessor.Value.deceleration;
+            var sharpness = IsMoving ? _movementAttachmentAccessor.Value.acceleration : _movementAttachmentAccessor.Value.deceleration;
 
             _horizontalVelocity = Vector3.MoveTowards(
                 _horizontalVelocity,
                 targetVelocity,
                 sharpness * Time.deltaTime
             );
-            CurrentSpeed = _horizontalVelocity.magnitude;
 
             // Apply gravity
             var jumpPressed = jumpInput.action.WasPerformedThisFrame();
@@ -167,6 +173,8 @@ namespace Spookline.SPC.Actor.FirstPerson {
 
             var velocity = _horizontalVelocity;
             velocity.y = _verticalVelocity;
+            
+            Velocity = velocity;
 
             if (!controller || !controller.enabled) return;
 
@@ -234,6 +242,15 @@ namespace Spookline.SPC.Actor.FirstPerson {
             var position = Possessed.mainTransform.position + groundCheckOffset + new Vector3(0, groundCheckRadius, 0);
             Gizmos.color = !IsGrounded ? Color.red : Color.green;
             Gizmos.DrawWireSphere(position, groundCheckRadius);
+        }
+
+        private void OnGizmos(ref GizmoEvt args) {
+            if (!args.HasFlag("movement") || !Possessed) return;
+            if (args.ScreenOverlayPass(out var screen)) {
+                screen.Global()
+                    .Field("Velocity", Velocity)
+                    .Field("Speed", CurrentSpeed);
+            }
         }
 
     }

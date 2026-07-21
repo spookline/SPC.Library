@@ -32,6 +32,11 @@ namespace Spookline.SPC.Actor.FirstPerson {
             set => _movementStateAttachmentAccessor.Value.CurrentSpeed = value;
         }
 
+        private Vector3 Velocity {
+            get => _movementStateAttachmentAccessor.Value.Velocity;
+            set => _movementStateAttachmentAccessor.Value.Velocity = value;
+        }
+
         private bool IsSprinting {
             get => _movementStateAttachmentAccessor.Value.IsSprinting;
             set => _movementStateAttachmentAccessor.Value.IsSprinting = value;
@@ -50,7 +55,7 @@ namespace Spookline.SPC.Actor.FirstPerson {
             Possessed = pawnToPossess;
             camera.Follow = Possessed.eyeTransform;
             if (_movementAttachmentAccessor.Value.fovEnabled) {
-                _fovSource = Ext.AddFovSource(new FovSource(() => IsSprinting,
+                _fovSource = Ext.AddFovSource(new FovSource(() => IsSprinting && IsMoving,
                     _movementAttachmentAccessor.Value.sprintFovMultiplier,
                     speed: _movementAttachmentAccessor.Value.sprintFovChangeSpeed, mode: FovValueMode.Multiplier));
             }

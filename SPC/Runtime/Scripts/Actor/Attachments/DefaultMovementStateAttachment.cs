@@ -14,6 +14,8 @@ namespace Spookline.SPC.Actor.Attachments {
         public bool IsMoving { get; set; }
 
         public float CurrentSpeed { get; set; }
+        
+        public Vector3 Velocity { get; set; }
 
         public Quaternion LookDirection { get; set; }
 

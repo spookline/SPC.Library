@@ -10,6 +10,10 @@ namespace Spookline.SPC.Actor.Attachments {
         public float moveSpeed = 5f;
         [FoldoutGroup("Speed"), Tooltip("Rate at which current speed changes towards target speed")]
         public float speedChangeRate = 5f;
+        [FoldoutGroup("Speed"), Tooltip("Rate at which the character accelerates")]
+        public float acceleration = 200;
+        [FoldoutGroup("Speed"), Tooltip("Rate at which the character decelerates")]
+        public float deceleration = 20;
 
         [FoldoutGroup("Speed"), Tooltip("Enable or disable sprinting")]
         public bool sprintEnabled = true;
