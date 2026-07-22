@@ -1,0 +1,94 @@
+﻿using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+namespace Spookline.SPC.Interaction {
+    public sealed class InteractableBuilder {
+
+        private InteractionType _interactionType =
+            InteractionType.LookAt;
+
+        private readonly List<Collider> _colliders = new();
+
+        private readonly List<IInteractablePreProcessor> _preProcessors = new();
+
+        private Action _interactAction;
+
+        private InteractableBuilder() { }
+
+        public static InteractableBuilder Create() {
+            return new InteractableBuilder();
+        }
+
+        public InteractableBuilder WithInteractionType(
+            InteractionType type) {
+            _interactionType = type;
+            return this;
+        }
+
+        public InteractableBuilder WithCollider(Collider targetCollider) {
+            if (targetCollider &&
+                !_colliders.Contains(targetCollider)) {
+                _colliders.Add(targetCollider);
+            }
+
+            return this;
+        }
+
+        public InteractableBuilder WithColliders(
+            params Collider[] targetColliders) {
+            if (targetColliders == null) return this;
+            foreach (var targetCollider in targetColliders)
+                WithCollider(targetCollider);
+            return this;
+        }
+
+        public InteractableBuilder WithCollidersFrom(
+            GameObject target,
+            bool includeChildren = true) {
+            var foundColliders = includeChildren
+                ? target.GetComponentsInChildren<Collider>(true)
+                : target.GetComponents<Collider>();
+            return WithColliders(foundColliders);
+        }
+
+        public InteractableBuilder WithPreProcessor(
+            IInteractablePreProcessor preProcessor) {
+            if (preProcessor == null) {
+                throw new ArgumentNullException(
+                    nameof(preProcessor));
+            }
+            _preProcessors.Add(preProcessor);
+            return this;
+        }
+
+        public InteractableBuilder RequireHold(float duration, bool useUnscaledTime = false) {
+            return WithPreProcessor(new InteractableHoldPreProcessor(duration, useUnscaledTime));
+        }
+
+
+        public InteractableBuilder OnInteract(Action action) {
+            _interactAction = action;
+            return this;
+        }
+
+        public InteractableBuilder AddInteractionAction(Action action) {
+            _interactAction += action;
+            return this;
+        }
+
+
+        public Interactable Register() {
+            var interactable = new Interactable {
+                type = _interactionType,
+                colliders = _colliders.ToArray(),
+                preProcessors = _preProcessors.ToArray(),
+                interactAction = _interactAction
+            };
+            if (InteractionManager.Instance.RegisterInteractable(interactable)) return interactable;
+            Debug.LogError("The interactable could not be registered.");
+            return null;
+        }
+
+    }
+}
