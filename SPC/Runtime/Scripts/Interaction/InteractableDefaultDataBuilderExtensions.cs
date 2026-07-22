@@ -1,4 +1,5 @@
 ﻿using System;
+using UnityEngine;
 
 namespace Spookline.SPC.Interaction {
     public static class InteractableDefaultDataBuilderExtensions {
@@ -16,6 +17,20 @@ namespace Spookline.SPC.Interaction {
         
         public static bool HasText(this Interactable interactable) =>
             interactable.HasData("text");
+
+        public static InteractableBuilder WithOutline(this InteractableBuilder builder, Func<MeshRenderer[]> renderers) {
+            return builder.WithData("outline", renderers);
+        }
+        
+        public static InteractableBuilder WithOutline(this InteractableBuilder builder, MeshRenderer[] renderers) {
+            return builder.WithOutline(() => renderers);
+        }
+        
+        public static Func<MeshRenderer[]> GetOutline(this Interactable interactable) =>
+            interactable.GetDataAsFunc<MeshRenderer[]>("outline");
+
+        public static bool HasOutline(this Interactable interactable) =>
+            interactable.HasData("outline");
 
     }
 }

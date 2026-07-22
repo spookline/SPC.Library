@@ -13,12 +13,18 @@ namespace Spookline.SPC.Interaction {
         private readonly List<IInteractablePreProcessor> _preProcessors = new();
         private Dictionary<string, object> _data = new();
 
-        private Action _interactAction;
+        private Func<bool> _isActive = () => true;
+        private Interactable.InteractAction _interactAction;
 
         private InteractableBuilder() { }
 
         public static InteractableBuilder Create() {
             return new InteractableBuilder();
+        }
+        
+        public InteractableBuilder WithIsActive(Func<bool> active) {
+            _isActive = active;
+            return this;
         }
         
         public InteractableBuilder WithData(Dictionary<string, object> data) {
@@ -83,24 +89,24 @@ namespace Spookline.SPC.Interaction {
         }
 
 
-        public InteractableBuilder OnInteract(Action action) {
+        /// <summary>
+        /// Return value of the delegate determines whether the interactable should be 
+        /// </summary>
+        /// <param name="action"></param>
+        /// <returns></returns>
+        public InteractableBuilder OnInteract(Interactable.InteractAction action) {
             _interactAction = action;
             return this;
         }
-
-        public InteractableBuilder AddInteractionAction(Action action) {
-            _interactAction += action;
-            return this;
-        }
-
-
+        
         public Interactable Register() {
             var interactable = new Interactable {
                 type = _interactionType,
                 colliders = _colliders.ToArray(),
                 preProcessors = _preProcessors.ToArray(),
                 interactAction = _interactAction,
-                data = _data
+                data = _data,
+                isActive = _isActive
             };
             if (InteractionManager.Instance.RegisterInteractable(interactable)) return interactable;
             Debug.LogError("The interactable could not be registered.");

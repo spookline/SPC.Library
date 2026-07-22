@@ -8,15 +8,16 @@ namespace Spookline.SPC.Interaction {
         public InteractionType type;
         public Collider[] colliders;
         public IInteractablePreProcessor[] preProcessors;
-        public Action interactAction;
+        public InteractAction interactAction;
         public Dictionary<string, object> data = new();
+        public Func<bool> isActive = () => true;
 
         public bool IsValid => colliders is { Length: > 0 } && interactAction != null;
 
         public bool HasPreProcessors => preProcessors is { Length: > 0 };
 
-        public void Interact() {
-            interactAction?.Invoke();
+        public void Interact(InteractionManager manager) {
+            interactAction?.Invoke(manager);
         }
 
         public bool ContainsCollider(Collider collider) {
@@ -25,10 +26,12 @@ namespace Spookline.SPC.Interaction {
         }
 
         public bool HasData(string key) => data.ContainsKey(key);
-        
+
         public string GetData(string key) => data[key] as string;
 
         public Func<T> GetDataAsFunc<T>(string key) => data[key] as Func<T>;
+
+        public delegate void InteractAction(InteractionManager manager);
 
     }
 

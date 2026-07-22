@@ -98,7 +98,7 @@ namespace Spookline.SPC.Interaction {
 
         private void UpdateCurrentTarget() {
             var newTarget = FindBestInteractable();
-            if(newTarget == CurrentInteractable) return;
+            if (newTarget == CurrentInteractable) return;
             SetCurrentInteractable(newTarget);
             if (IsProcessingInteraction && ActiveInteractable != CurrentInteractable) {
                 CancelInteraction();
@@ -110,7 +110,7 @@ namespace Spookline.SPC.Interaction {
             _activeContext = null;
             _activeProcessorIndex = 0;
         }
-        
+
         public void SetCurrentInteractable(Interactable interactable) {
             if (CurrentInteractable == interactable) return;
             CurrentInteractable = interactable;
@@ -138,7 +138,7 @@ namespace Spookline.SPC.Interaction {
 
             var target = CurrentInteractable ?? FindBestInteractable();
             if (target == null) return false;
-            
+
             // Interaction started evt
             if (!target.HasPreProcessors) {
                 return InvokeInteraction(target);
@@ -151,24 +151,25 @@ namespace Spookline.SPC.Interaction {
         }
 
         public void CancelInteraction() {
-            if(!IsProcessingInteraction) return;
+            if (!IsProcessingInteraction) return;
             var cancelledInteractable = ActiveInteractable;
             var currentPreProcessor = GetCurrentPreProcessor();
             if (currentPreProcessor != null) {
                 try {
                     currentPreProcessor.Cancel(_activeContext);
-                }catch(Exception e) {
+                } catch (Exception e) {
                     Debug.LogException(e, this);
                 }
             }
+
             ResetProProcessors(cancelledInteractable);
             ClearActiveInteraction();
-            
+
             // Interaction cancelled evt
         }
 
         private void UpdateActiveInteraction() {
-            if(!IsProcessingInteraction) return;
+            if (!IsProcessingInteraction) return;
             if (!_interactionInputHeld) {
                 CancelInteraction();
                 return;
@@ -178,6 +179,7 @@ namespace Spookline.SPC.Interaction {
                 CancelInteraction();
                 return;
             }
+
             ProcessCurrentPreProcessor(Time.deltaTime, Time.unscaledDeltaTime);
         }
 
@@ -187,6 +189,7 @@ namespace Spookline.SPC.Interaction {
                 AdvanceToNextPreProcessor();
                 return;
             }
+
             _activeContext.SetFrameData(deltaTime, unscaledDeltaTime, _interactionInputHeld);
             InteractionProcessResult result;
             try {
@@ -220,12 +223,14 @@ namespace Spookline.SPC.Interaction {
                     _activeProcessorIndex++;
                     continue;
                 }
+
                 preProcessor.Reset();
                 try {
                     if (!preProcessor.CanBegin(_activeContext)) {
                         CancelInteraction();
                         return false;
                     }
+
                     preProcessor.Begin(_activeContext);
                     return true;
                 } catch (Exception exception) {
@@ -239,18 +244,19 @@ namespace Spookline.SPC.Interaction {
         }
 
         private void AdvanceToNextPreProcessor() {
-            if(!IsProcessingInteraction) return;
+            if (!IsProcessingInteraction) return;
             _activeProcessorIndex++;
             if (_activeProcessorIndex < ActiveInteractable.preProcessors.Length) {
                 BeginCurrentPreProcessor();
                 return;
             }
+
             CompleteActiveInteraction();
         }
 
         private void CompleteActiveInteraction() {
             var completedInteractable = ActiveInteractable;
-            
+
             ResetProProcessors(completedInteractable);
             ClearActiveInteraction();
 
@@ -260,8 +266,8 @@ namespace Spookline.SPC.Interaction {
         private bool InvokeInteraction(Interactable interactable) {
             if (interactable == null) return false;
             try {
-                interactable.Interact();
-                // Interact event evt
+                interactable.Interact(this);
+                new InteractEvt { Interactable = interactable }.Raise();
                 return true;
             } catch (Exception ex) {
                 Debug.LogException(ex, this);
@@ -269,14 +275,22 @@ namespace Spookline.SPC.Interaction {
             }
         }
 
+        public void MarkDirty() {
+            if (CurrentInteractable == null) return;
+            new InteractionTargetChangedEvt {
+                Interactable = CurrentInteractable
+            }.Raise();
+        }
+
         private IInteractablePreProcessor GetCurrentPreProcessor() {
-            if(ActiveInteractable?.preProcessors == null) return null;
-            if(_activeProcessorIndex < 0 || _activeProcessorIndex >= ActiveInteractable.preProcessors.Length) return null;
+            if (ActiveInteractable?.preProcessors == null) return null;
+            if (_activeProcessorIndex < 0 || _activeProcessorIndex >= ActiveInteractable.preProcessors.Length)
+                return null;
             return ActiveInteractable.preProcessors[_activeProcessorIndex];
         }
 
         private void ResetProProcessors(Interactable interactable) {
-            if(interactable?.preProcessors == null) return;
+            if (interactable?.preProcessors == null) return;
             foreach (var preProcessor in interactable.preProcessors) {
                 preProcessor?.Reset();
             }
@@ -286,30 +300,32 @@ namespace Spookline.SPC.Interaction {
             var cameraTransform = interactionCamera.transform;
             var ray = new Ray(cameraTransform.position, cameraTransform.forward);
             if (!Physics.Raycast(ray, out var hit, lookDistance, interactionLayers, triggerInteraction)) return null;
-            if(!_colliderLookup.TryGetValue(hit.collider, out var interactable)) return null;
-            return interactable.type == InteractionType.LookAt ? interactable : null;
+            if (!_colliderLookup.TryGetValue(hit.collider, out var interactable)) return null;
+            return interactable.type == InteractionType.LookAt && interactable.isActive() ? interactable : null;
         }
 
         private Interactable FindClosestProximityInteractable() {
             var origin = interactionCamera.transform.position;
 
-            var hits = Physics.OverlapSphereNonAlloc(origin, proximityRadius, _proximityColliders, interactionLayers, triggerInteraction);
+            var hits = Physics.OverlapSphereNonAlloc(origin, proximityRadius, _proximityColliders, interactionLayers,
+                triggerInteraction);
             _checkedInteractables.Clear();
 
             Interactable closestInteractable = null;
             var closestDistanceSquared = float.MaxValue;
             for (var i = 0; i < hits; i++) {
                 var nearbyCollider = _proximityColliders[i];
-                if(!nearbyCollider) continue;
-                if(!_colliderLookup.TryGetValue(nearbyCollider, out Interactable interactable)) continue;
-                if(interactable.type != InteractionType.Proximity) continue;
-                if(!_checkedInteractables.Add(interactable)) continue;
+                if (!nearbyCollider) continue;
+                if (!_colliderLookup.TryGetValue(nearbyCollider, out Interactable interactable)) continue;
+                if (interactable.type != InteractionType.Proximity) continue;
+                if (!_checkedInteractables.Add(interactable)) continue;
                 var interactableDistanceSquared = GetClosestDistanceSquared(interactable, origin);
-                if(interactableDistanceSquared >= closestDistanceSquared) continue;
+                if (interactableDistanceSquared >= closestDistanceSquared) continue;
                 closestDistanceSquared = interactableDistanceSquared;
                 closestInteractable = interactable;
             }
-            return closestInteractable;
+
+            return closestInteractable != null && closestInteractable.isActive() ? closestInteractable : null;
         }
 
         private static float GetClosestDistanceSquared(Interactable interactable, Vector3 origin) {
@@ -318,7 +334,7 @@ namespace Spookline.SPC.Interaction {
             var closestDistanceSquared = float.MaxValue;
 
             foreach (var collider in interactable.colliders) {
-                if(!collider || !collider.enabled || !collider.gameObject.activeInHierarchy) continue;
+                if (!collider || !collider.enabled || !collider.gameObject.activeInHierarchy) continue;
                 var closestPoint = collider.ClosestPoint(origin);
                 var distanceSquared = (closestPoint - origin).sqrMagnitude;
                 if (distanceSquared < closestDistanceSquared) {
@@ -328,7 +344,14 @@ namespace Spookline.SPC.Interaction {
 
             return closestDistanceSquared;
         }
+
     }
+}
+
+public struct InteractEvt : Evt<InteractEvt> {
+
+    public Interactable Interactable { get; set; }
+
 }
 
 public struct InteractionTargetChangedEvt : Evt<InteractionTargetChangedEvt> {
