@@ -39,11 +39,11 @@ namespace Spookline.SPC.Save {
 
         public override void Load() {
             base.Load();
-            On<GlobalStartEvt>().ChainDo(LoadPlayerData, EventPriority.Earlier);
+            /*On<GlobalStartEvt>().ChainDo(LoadPlayerData, EventPriority.Earlier);
             On<PlayerConfigSaveEvt>().ChainDo(SystemPlayerConfigSave);
             On<PlayerConfigLoadEvt>().ChainDo(SystemPlayerConfigLoad);
             On<DebugFlagsChangedEvt>().Do(OnDebugFlagsChanged);
-            On<GlobalTickEvt>().Do(OnGlobalTick);
+            On<GlobalTickEvt>().Do(OnGlobalTick);*/
         }
 
         public void MarkPlayerDataDirty() {
