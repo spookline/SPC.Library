@@ -1,25 +1,33 @@
 ﻿using Spookline.SPC.Actor;
+using Spookline.SPC.Ext;
 
 namespace Spookline.SPC.Cameras {
-    public class CameraBobbingPawnMovementSubscriber : PawnMovementSubscriber<CameraBobbingPawnMovementSubscriber> {
+    public class CameraBobbingPawnMovementSubscriber : SpookBehaviour<CameraBobbingPawnMovementSubscriber> {
 
         public CameraBobbingPreset idle;
         public CameraBobbingPreset walk;
         public CameraBobbingPreset sprint;
         public CameraBobbingPreset crouch;
 
+        private PawnMovementStateSubscriber<CameraBobbingPawnMovementSubscriber> _subscriber;
+
+        private void Awake() {
+            _subscriber = this.SubscribeToPawnMovementState();
+        }
+
 
         private void LateUpdate() {
-            if (!IsStateAvailable || !CameraBobbing.HasInstance) return;
+            if (!_subscriber.IsStateAvailable || !CameraBobbing.HasInstance) return;
+            var state = _subscriber.State;
             var cameraBobbing = CameraBobbing.Instance;
-            if (!State.IsMoving) {
+            if (!state.IsMoving) {
                 if (idle) cameraBobbing.SetState(idle);
                 return;
             }
 
-            if (State.IsCrouching && crouch) {
+            if (state.IsCrouching && crouch) {
                 cameraBobbing.SetState(crouch);
-            } else if (State.IsSprinting && sprint) {
+            } else if (state.IsSprinting && sprint) {
                 cameraBobbing.SetState(sprint);
             } else if (walk) {
                 cameraBobbing.SetState(walk);

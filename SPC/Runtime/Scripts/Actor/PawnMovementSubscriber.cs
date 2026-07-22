@@ -1,27 +1,45 @@
 ﻿using Spookline.SPC.Ext;
 
 namespace Spookline.SPC.Actor {
-    public abstract class PawnMovementSubscriber<T> : SpookBehaviour<T> where T : SpookBehaviour<T> {
-        
-        protected bool IsStateAvailable => _movementStateAttachment is { HasValue: true };
-        
-        protected IMovementStateAttachment State => _movementStateAttachment.Value;
+    public class PawnMovementStateSubscriber<T> where T : SpookBehaviour<T> {
+
+        public bool IsStateAvailable => _movementStateAttachment is { HasValue: true };
+        public IMovementStateAttachment State => _movementStateAttachment.Value;
 
         private AttachmentAccessor<IMovementStateAttachment> _movementStateAttachment;
+        private readonly Condition _condition;
+        private readonly SpookBehaviour<T> _behaviour;
 
-        protected void Awake() {
-            On<PawnPossessedEvt>().Do(evt => {
-                if(!Condition(evt.Pawn)) return;
+        public PawnMovementStateSubscriber(SpookBehaviour<T> behaviour, Condition condition = null) {
+            _behaviour = behaviour;
+            _condition = condition;
+        }
+
+        public void Subscribe() {
+            _behaviour.On<PawnPossessedEvt>().Do(evt => {
+                var condition = _condition?.Invoke(evt.Pawn) ?? true;
+                if (!condition) return;
                 _movementStateAttachment = evt.Pawn.GetAccessor<IMovementStateAttachment>();
             });
-            On<PawnExorcisedEvt>().Do(evt => {
-                if (evt.Pawn.HasAttachment<IMovementStateAttachment>() && Condition(evt.Pawn)) {
+            _behaviour.On<PawnExorcisedEvt>().Do(evt => {
+                var condition = _condition?.Invoke(evt.Pawn) ?? true;
+                if (evt.Pawn.HasAttachment<IMovementStateAttachment>() && condition) {
                     _movementStateAttachment = null;
                 }
             });
         }
 
-        protected virtual bool Condition(Pawn pawn) => true;
+        public delegate bool Condition(Pawn pawn);
 
+    }
+
+    public static class PawnMovementSubscriberExtensions {
+
+        public static PawnMovementStateSubscriber<T> SubscribeToPawnMovementState<T>(this SpookBehaviour<T> behaviour, PawnMovementStateSubscriber<T>.Condition condition = null)
+            where T : SpookBehaviour<T> {
+            var subscriber = new PawnMovementStateSubscriber<T>(behaviour, condition);
+            subscriber.Subscribe();
+            return subscriber;
+        }
     }
 }

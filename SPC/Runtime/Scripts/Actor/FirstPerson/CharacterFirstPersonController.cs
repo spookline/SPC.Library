@@ -64,7 +64,6 @@ namespace Spookline.SPC.Actor.FirstPerson {
             var controller = _characterAttachmentAccessor.Value.controller;
 
             Input = moveInput.action.ReadValue<Vector2>();
-            Debug.Log("Setting input to: " + Input);
             IsSprinting = sprintInput.action.IsPressed();
             IsCrouching = crouchInput.action.IsPressed();
 
