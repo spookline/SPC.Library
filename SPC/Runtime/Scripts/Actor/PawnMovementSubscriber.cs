@@ -1,4 +1,5 @@
-﻿using Spookline.SPC.Ext;
+﻿using Spookline.SPC.Actor.Attachments;
+using Spookline.SPC.Ext;
 
 namespace Spookline.SPC.Actor {
     public class PawnMovementStateSubscriber<T> where T : SpookBehaviour<T> {

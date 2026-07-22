@@ -1,6 +1,6 @@
 ﻿using UnityEngine;
 
-namespace Spookline.SPC.Actor {
+namespace Spookline.SPC.Actor.Attachments {
     public interface IMovementStateAttachment : IPawnAttachment {
 
         

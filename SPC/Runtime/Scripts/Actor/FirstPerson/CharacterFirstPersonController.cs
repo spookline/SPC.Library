@@ -1,4 +1,4 @@
-﻿using System;
+﻿
 using Sirenix.OdinInspector;
 using Spookline.SPC.Debugging;
 using Spookline.SPC.Events;
