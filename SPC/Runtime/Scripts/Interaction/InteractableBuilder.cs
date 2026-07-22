@@ -11,6 +11,7 @@ namespace Spookline.SPC.Interaction {
         private readonly List<Collider> _colliders = new();
 
         private readonly List<IInteractablePreProcessor> _preProcessors = new();
+        private Dictionary<string, object> _data = new();
 
         private Action _interactAction;
 
@@ -18,6 +19,17 @@ namespace Spookline.SPC.Interaction {
 
         public static InteractableBuilder Create() {
             return new InteractableBuilder();
+        }
+        
+        public InteractableBuilder WithData(Dictionary<string, object> data) {
+            _data = data;
+            return this;
+        }
+        
+        public InteractableBuilder WithData(string key, object value) {
+            if (string.IsNullOrEmpty(key)) return this;
+            _data[key] = value;
+            return this;
         }
 
         public InteractableBuilder WithInteractionType(
@@ -63,6 +75,10 @@ namespace Spookline.SPC.Interaction {
         }
 
         public InteractableBuilder RequireHold(float duration, bool useUnscaledTime = false) {
+            return WithPreProcessor(new InteractableHoldPreProcessor(() => duration, useUnscaledTime));
+        }
+        
+        public InteractableBuilder RequireHold(Func<float> duration, bool useUnscaledTime = false) {
             return WithPreProcessor(new InteractableHoldPreProcessor(duration, useUnscaledTime));
         }
 
@@ -83,7 +99,8 @@ namespace Spookline.SPC.Interaction {
                 type = _interactionType,
                 colliders = _colliders.ToArray(),
                 preProcessors = _preProcessors.ToArray(),
-                interactAction = _interactAction
+                interactAction = _interactAction,
+                data = _data
             };
             if (InteractionManager.Instance.RegisterInteractable(interactable)) return interactable;
             Debug.LogError("The interactable could not be registered.");

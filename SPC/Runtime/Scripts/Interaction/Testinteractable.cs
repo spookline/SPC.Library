@@ -10,7 +10,8 @@ namespace Spookline.SPC.Interaction {
                 .WithInteractionType(InteractionType.LookAt)
                 .OnInteract(() => Debug.Log("Interacted"))
                 .WithCollidersFrom(gameObject)
-                .RequireHold(3f)
+                .RequireHold(0f)
+                .WithText("Magma")
                 .Register();
         }
 

@@ -1,4 +1,5 @@
-﻿using Spookline.SPC.Events;
+﻿using System;
+using Spookline.SPC.Events;
 using UnityEngine;
 
 namespace Spookline.SPC.Interaction {
@@ -7,14 +8,16 @@ namespace Spookline.SPC.Interaction {
         private readonly bool _useUnscaledTime;
 
         public bool IsCompleted { get; private set; }
-        public float HoldDuration { get; private set; }
+        public float HoldDuration => _holdDuration();
 
         public float ElapsedTime { get; private set; }
 
         public float Progress => HoldDuration <= 0f ? 1f : Mathf.Clamp01(ElapsedTime / HoldDuration);
+        
+        private readonly Func<float> _holdDuration;
 
-        public InteractableHoldPreProcessor(float holdDuration, bool useUnscaledTime = false) {
-            HoldDuration = holdDuration;
+        public InteractableHoldPreProcessor(Func<float> holdDuration, bool useUnscaledTime = false) {
+            _holdDuration = holdDuration;
             _useUnscaledTime = useUnscaledTime;
         }
 
