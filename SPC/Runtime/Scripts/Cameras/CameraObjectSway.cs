@@ -17,7 +17,8 @@ namespace Spookline.SPC.Cameras {
 
         private Vector3 _targetPosition;
 
-        private void Awake() {
+        protected override void Awake() {
+            base.Awake();
             _initialPosition = transform.localPosition;
             _currentPosition = _initialPosition;
         }
