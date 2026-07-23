@@ -8,6 +8,8 @@ using UnityEngine;
 namespace Spookline.SPC.Interaction {
     public sealed class InteractionManager : SpookManagerBehaviour<InteractionManager> {
 
+        #region Configuration
+
         public Camera interactionCamera;
 
         public float lookDistance = 3f;
@@ -16,6 +18,10 @@ namespace Spookline.SPC.Interaction {
         public LayerMask interactionLayers;
 
         public QueryTriggerInteraction triggerInteraction = QueryTriggerInteraction.Collide;
+
+        #endregion
+
+        #region State
 
         private readonly List<Interactable> _interactables = new();
         private readonly Dictionary<Collider, Interactable> _colliderLookup = new();
@@ -44,6 +50,10 @@ namespace Spookline.SPC.Interaction {
 
         public IReadOnlyList<VisibilityRay> VisibilityRays => _visibilityRays;
 
+        #endregion
+
+        #region Unity Lifecycle
+
         private void Update() {
             if (!interactionCamera) return;
             UpdateCurrentTarget();
@@ -55,6 +65,10 @@ namespace Spookline.SPC.Interaction {
             _interactionInputHeld = false;
             CancelInteraction();
         }
+
+        #endregion
+
+        #region Interactable Registration
 
         public bool RegisterInteractable(Interactable interactable) {
             if (interactable is not { IsValid: true } || _interactables.Contains(interactable)) return false;
@@ -100,6 +114,10 @@ namespace Spookline.SPC.Interaction {
             SetCurrentInteractable(null);
         }
 
+        #endregion
+
+        #region Target Selection
+
         private Interactable FindBestInteractable() {
             var lookInteractable = FindLookInteractable();
             return lookInteractable ?? FindClosestProximityInteractable();
@@ -113,6 +131,10 @@ namespace Spookline.SPC.Interaction {
                 CancelInteraction();
             }
         }
+
+        #endregion
+
+        #region Input and Interaction State
 
         private void ClearActiveInteraction() {
             ActiveInteractable = null;
@@ -139,6 +161,10 @@ namespace Spookline.SPC.Interaction {
                 CancelInteraction();
             }
         }
+
+        #endregion
+
+        #region Interaction Processing
 
         public bool BeginInteraction() {
             if (IsProcessingInteraction) {
@@ -272,6 +298,10 @@ namespace Spookline.SPC.Interaction {
             InvokeInteraction(completedInteractable);
         }
 
+        #endregion
+
+        #region Interaction Notifications
+
         private bool InvokeInteraction(Interactable interactable) {
             if (interactable == null) return false;
             try {
@@ -291,6 +321,10 @@ namespace Spookline.SPC.Interaction {
             }.Raise();
         }
 
+        #endregion
+
+        #region Pre-Processor State
+
         private IInteractablePreProcessor GetCurrentPreProcessor() {
             if (ActiveInteractable?.preProcessors == null) return null;
             if (_activeProcessorIndex < 0 || _activeProcessorIndex >= ActiveInteractable.preProcessors.Length)
@@ -304,6 +338,10 @@ namespace Spookline.SPC.Interaction {
                 preProcessor?.Reset();
             }
         }
+
+        #endregion
+
+        #region Physics Queries
 
         private Interactable FindLookInteractable() {
             var cameraTransform = interactionCamera.transform;
@@ -390,8 +428,12 @@ namespace Spookline.SPC.Interaction {
             return closestDistanceSquared;
         }
 
+        #endregion
+
     }
 }
+
+#region Interaction Events
 
 public struct InteractEvt : Evt<InteractEvt> {
 
@@ -410,3 +452,5 @@ public struct InteractionCancelledEvt : Evt<InteractionCancelledEvt> {
     public Interactable Interactable { get; set; }
 
 }
+
+#endregion
