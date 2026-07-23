@@ -101,8 +101,7 @@ namespace Spookline.SPC.Interaction {
 
         private Interactable FindBestInteractable() {
             var lookInteractable = FindLookInteractable();
-            if (lookInteractable != null) return lookInteractable;
-            return FindClosestProximityInteractable();
+            return lookInteractable ?? FindClosestProximityInteractable();
         }
 
         private void UpdateCurrentTarget() {
@@ -326,8 +325,9 @@ namespace Spookline.SPC.Interaction {
             for (var i = 0; i < hits; i++) {
                 var nearbyCollider = _proximityColliders[i];
                 if (!nearbyCollider) continue;
-                if (!_colliderLookup.TryGetValue(nearbyCollider, out Interactable interactable)) continue;
+                if (!_colliderLookup.TryGetValue(nearbyCollider, out var interactable)) continue;
                 if (interactable.type != InteractionType.Proximity) continue;
+                if (interactable.isActive == null || !interactable.isActive()) continue;
                 if (!_checkedInteractables.Add(interactable)) continue;
                 if (!HasVisibilityTo(interactable, origin)) continue;
                 var interactableDistanceSquared = GetClosestDistanceSquared(interactable, origin);
@@ -335,12 +335,13 @@ namespace Spookline.SPC.Interaction {
                 closestDistanceSquared = interactableDistanceSquared;
                 closestInteractable = interactable;
             }
-
-            return closestInteractable != null && closestInteractable.isActive() ? closestInteractable : null;
+            return closestInteractable;
         }
 
         private bool HasVisibilityTo(Interactable interactable, Vector3 origin) {
             if (interactable?.colliders == null) return false;
+
+            const float raycastPadding = 0.01f;
 
             foreach (var collider in interactable.colliders) {
                 if (!collider || !collider.enabled || !collider.gameObject.activeInHierarchy) continue;
@@ -353,8 +354,8 @@ namespace Spookline.SPC.Interaction {
                     return true;
                 }
 
-                var isVisible = Physics.Raycast(origin, direction / distance, out var hit, distance, interactionLayers,
-                    QueryTriggerInteraction.Ignore) && interactable.ContainsCollider(hit.collider);
+                var isVisible = Physics.Raycast(origin, direction / distance, out var hit, distance + raycastPadding,
+                    interactionLayers, triggerInteraction) && interactable.ContainsCollider(hit.collider);
                 _visibilityRays.Add(new VisibilityRay { origin = origin, target = closestPoint, isVisible = isVisible });
                 if (isVisible) return true;
             }
