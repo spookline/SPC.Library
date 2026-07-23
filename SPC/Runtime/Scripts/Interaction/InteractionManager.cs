@@ -25,6 +25,7 @@ namespace Spookline.SPC.Interaction {
         private bool _interactionInputHeld;
         private readonly HashSet<Interactable> _checkedInteractables = new();
         private readonly Collider[] _proximityColliders = new Collider[32];
+        private readonly RaycastHit[] _lookRaycastHits = new RaycastHit[16];
         private readonly List<VisibilityRay> _visibilityRays = new();
 
         public struct VisibilityRay {
@@ -307,7 +308,16 @@ namespace Spookline.SPC.Interaction {
         private Interactable FindLookInteractable() {
             var cameraTransform = interactionCamera.transform;
             var ray = new Ray(cameraTransform.position, cameraTransform.forward);
-            if (!Physics.Raycast(ray, out var hit, lookDistance, interactionLayers, triggerInteraction)) return null;
+            var hitCount = Physics.RaycastNonAlloc(ray, _lookRaycastHits, lookDistance, interactionLayers,
+                triggerInteraction);
+            if (hitCount == 0) return null;
+
+            var closestHit = _lookRaycastHits[0];
+            for (var i = 1; i < hitCount; i++) {
+                if (_lookRaycastHits[i].distance < closestHit.distance) closestHit = _lookRaycastHits[i];
+            }
+
+            var hit = closestHit;
             if (!_colliderLookup.TryGetValue(hit.collider, out var interactable)) return null;
             return interactable.type == InteractionType.LookAt && interactable.isActive() ? interactable : null;
         }
