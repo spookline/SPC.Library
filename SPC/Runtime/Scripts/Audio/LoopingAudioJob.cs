@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
 using Cysharp.Threading.Tasks;
 using UnityEngine;
 
@@ -16,6 +15,7 @@ namespace Spookline.SPC.Audio {
 
         private int _currentIndex;
         private AudioJobReference[] _cycle;
+        private bool _setupInProgress;
 
         public LoopingAudioJob(
             AudioJob definition,
@@ -40,64 +40,93 @@ namespace Spookline.SPC.Audio {
             IsDisposed = true;
             Stop();
             if (_cycle == null) return;
-            foreach (var reference in _cycle) reference?.Dispose();
+            foreach (var reference in _cycle) {
+                if (reference?.handle) {
+                    reference.handle.onContinuation -= HandleContinuation;
+                    reference.handle.KeepAlive = false;
+                }
+                reference?.Dispose();
+            }
 
             _cycle = null;
         }
 
         public async UniTask Setup(bool autostart = false) {
-            if (_cycle != null) {
+            if (IsDisposed || _cycle != null || _setupInProgress) {
                 Debug.LogWarning("LoopingAudioJob is already set up, skipping setup.");
                 return;
             }
 
+            if (!definition.definition) {
+                Debug.LogError("LoopingAudioJob requires a valid AudioJob definition.");
+                return;
+            }
+
+            _setupInProgress = true;
             var refs = new AudioJobReference[cycleCount];
-            var tasks = new List<UniTask>();
-            for (var i = 0; i < cycleCount; i++) {
-                var reference = definition.UnstartedSync(out var task);
-                tasks.Add(task);
-                refs[i] = reference;
-            }
+            try {
+                var tasks = new UniTask[cycleCount];
+                for (var i = 0; i < cycleCount; i++) {
+                    refs[i] = definition.UnstartedSync(out tasks[i]);
+                }
 
-            _cycle = refs;
-            await UniTask.WhenAll(tasks).TimeoutWithoutException(TimeSpan.FromMinutes(1));
-            if (IsDisposed) return;
-            for (var i = 0; i < cycleCount; i++) {
-                var reference = refs[i];
-                var finalizedIndex = i;
-                reference.handle.onContinuation += () => OnFadeOutBegin(finalizedIndex);
-                reference.handle.KeepAlive = true;
-            }
+                await UniTask.WhenAll(tasks).Timeout(TimeSpan.FromMinutes(1));
+                if (IsDisposed) return;
+                for (var i = 0; i < cycleCount; i++) {
+                    if (refs[i] == null || !refs[i].IsValid) {
+                        Debug.LogError("LoopingAudioJob could not prepare all audio handles.");
+                        foreach (var prepared in refs) prepared?.Dispose();
+                        return;
+                    }
+                    refs[i].handle.onContinuation += HandleContinuation;
+                    refs[i].handle.KeepAlive = true;
+                }
 
-            _currentIndex = 0;
-            if (autostart) Start();
+                _cycle = refs;
+                _currentIndex = 0;
+                if (autostart) Start();
+            } catch (Exception exception) {
+                Debug.LogException(exception);
+                foreach (var reference in refs) reference?.Dispose();
+            } finally {
+                _setupInProgress = false;
+            }
         }
 
         public void Start() {
-            if (_cycle == null) {
+            if (IsDisposed || _cycle == null) {
                 Debug.LogError("LoopingAudioJob is not set up, call Setup() first.");
                 return;
             }
 
+            if (_active) return;
             _active = true;
-            StartAt(0);
+            StartAt(_currentIndex);
         }
 
         public void Stop() {
             _active = false;
             if (_cycle == null) return;
-            foreach (var reference in _cycle) reference?.Stop();
+            foreach (var reference in _cycle) {
+                if (reference?.handle) reference.handle.Fades.Reset(reference.handle.source.volume);
+                reference?.Stop();
+            }
         }
 
-        private void OnFadeOutBegin(int index) {
+        private void HandleContinuation() {
             if (!_active) return;
-            var nextIndex = (index + 1) % cycleCount;
+            var nextIndex = (_currentIndex + 1) % cycleCount;
             StartAt(nextIndex);
         }
 
         private void StartAt(int index) {
             if (!_active) return;
             var reference = _cycle[index];
+            if (reference is not { IsValid: true }) {
+                _active = false;
+                Debug.LogError("LoopingAudioJob lost its audio handle.");
+                return;
+            }
             var handle = reference.handle;
             if (crossfadeDuration > 0) {
                 handle.Fades.FadeIn(crossfadeDuration);

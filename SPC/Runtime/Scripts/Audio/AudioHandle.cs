@@ -149,6 +149,7 @@ namespace Spookline.SPC.Audio {
             _hasCalledContinuation = false;
             State = AudioHandleState.Starting;
             Fades.Reset(_targetVolume);
+            source.volume = _targetVolume;
             source.Play();
         }
 
