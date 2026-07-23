@@ -19,7 +19,6 @@ namespace Spookline.SPC.Editor {
     public sealed class AudioDefinitionWindow : EditorWindow {
 
         private const string StylePath = "Assets/Library/SPC/Editor/AudioDefinitionWindow.uss";
-        private const string TreeViewDataKey = "spookline-audio-library-tree";
 
         private readonly List<AudioDefinition> _definitions = new();
         private readonly Dictionary<string, int> _definitionItemIds = new();
@@ -177,7 +176,6 @@ namespace Spookline.SPC.Editor {
             _tree = new TreeView {
                 selectionType = SelectionType.Single,
                 virtualizationMethod = CollectionVirtualizationMethod.DynamicHeight,
-                viewDataKey = TreeViewDataKey,
                 fixedItemHeight = 24f
             };
             _tree.AddToClassList("audio-tree");
@@ -368,20 +366,10 @@ namespace Spookline.SPC.Editor {
 
                 _selectedDefinition = targetDefinition;
                 _selectedMixerGroup = targetDefinition ? targetDefinition.group : null;
-                _tree.SetSelectionByIdWithoutNotify(new[] { selectionId });
+                _tree.SetSelectionByIdWithoutNotify(new[] { -1 });
                 if (_selectedDefinition) DrawDefinitionDetails(_selectedDefinition);
 
-                var targetGuid = selectionGuid;
-                _tree.schedule.Execute(() => {
-                    if (!this || _tree == null || buildVersion != _treeBuildVersion) return;
-
-                    if (parentId != 0) _tree.ExpandItem(parentId);
-                    _tree.SetSelectionByIdWithoutNotify(new[] { selectionId });
-                    _tree.ScrollToItemById(selectionId);
-                    _suppressTreeSelection = false;
-                    if (_requestedSelectionGuid == targetGuid)
-                        _requestedSelectionGuid = null;
-                });
+                SelectTreeItemAfterRebuild(selectionGuid, selectionId, parentId, buildVersion);
             } else if (_selectedMixerGroup) {
                 _suppressTreeSelection = false;
                 DrawMixerGroupDetails(new AudioTreeItem {
@@ -393,6 +381,47 @@ namespace Spookline.SPC.Editor {
                 _suppressTreeSelection = false;
                 DrawEmptyState();
             }
+        }
+
+        private void SelectTreeItemAfterRebuild(
+            string targetGuid,
+            int selectionId,
+            int parentId,
+            int buildVersion,
+            int attempt = 0
+        ) {
+            _tree.schedule.Execute(() => {
+                if (!this || _tree == null || buildVersion != _treeBuildVersion) return;
+
+                _suppressTreeSelection = true;
+                _tree.SetSelectionByIdWithoutNotify(new[] { -1 });
+                _tree.SetSelectionById(selectionId);
+                if (parentId != 0) _tree.ExpandItem(parentId);
+
+                // Expanding changes the flattened row indices, so select once more against
+                // the materialized tree before focusing and framing the item.
+                _tree.RefreshItems();
+                var selectionIndex = _tree.viewController.GetIndexForId(selectionId);
+                if (selectionIndex >= 0) {
+                    _tree.SetSelectionWithoutNotify(Array.Empty<int>());
+                    _tree.SetSelection(selectionIndex);
+                } else {
+                    _tree.SetSelectionByIdWithoutNotify(new[] { -1 });
+                    _tree.SetSelectionById(selectionId);
+                }
+                _tree.Focus();
+                _tree.ScrollToItemById(selectionId);
+
+                var selectedItem = _tree.selectedItem as AudioTreeItem;
+                if (selectedItem?.guid != targetGuid && attempt < 5) {
+                    SelectTreeItemAfterRebuild(targetGuid, selectionId, parentId, buildVersion, attempt + 1);
+                    return;
+                }
+
+                _suppressTreeSelection = false;
+                if (_requestedSelectionGuid == targetGuid)
+                    _requestedSelectionGuid = null;
+            }).StartingIn(attempt == 0 ? 1 : 25);
         }
 
         private void DrawEmptyState() {
@@ -1098,6 +1127,7 @@ namespace Spookline.SPC.Editor {
         );
 
         private static bool _registered;
+        private static AudioDefinition _contextDefinition;
 
         static AudioDefinitionAssetContextMenu() {
             Selection.selectionChanged += RefreshRegistration;
@@ -1107,22 +1137,23 @@ namespace Spookline.SPC.Editor {
 
         private static void RefreshRegistration() {
             Remove();
-            if (Selection.activeObject is not AudioDefinition || AddMenuItemMethod == null) return;
+            _contextDefinition = Selection.activeObject as AudioDefinition;
+            if (!_contextDefinition || AddMenuItemMethod == null) return;
 
             AddMenuItemMethod.Invoke(null, new object[] {
                 MenuPath,
                 string.Empty,
                 false,
                 19,
-                (Action)OpenSelected,
+                (Action)OpenContextDefinition,
                 (Func<bool>)(() => Selection.activeObject is AudioDefinition)
             });
             _registered = true;
         }
 
-        private static void OpenSelected() {
-            if (Selection.activeObject is AudioDefinition definition)
-                AudioDefinitionWindow.OpenDefinition(definition);
+        private static void OpenContextDefinition() {
+            if (_contextDefinition)
+                AudioDefinitionWindow.OpenDefinition(_contextDefinition);
         }
 
         private static void Remove() {
