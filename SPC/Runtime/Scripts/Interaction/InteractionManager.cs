@@ -11,7 +11,7 @@ namespace Spookline.SPC.Interaction {
         public Camera interactionCamera;
 
         public float lookDistance = 3f;
-        public float proximityRadius = 2f;
+        public float proximityRadius = 4f;
 
         public LayerMask interactionLayers;
 
@@ -23,8 +23,15 @@ namespace Spookline.SPC.Interaction {
         private InteractionContext _activeContext;
         private int _activeProcessorIndex;
         private bool _interactionInputHeld;
-        private HashSet<Interactable> _checkedInteractables = new();
-        private Collider[] _proximityColliders = new Collider[32];
+        private readonly HashSet<Interactable> _checkedInteractables = new();
+        private readonly Collider[] _proximityColliders = new Collider[32];
+        private readonly List<VisibilityRay> _visibilityRays = new();
+
+        public struct VisibilityRay {
+            public Vector3 origin;
+            public Vector3 target;
+            public bool isVisible;
+        }
 
         public Interactable CurrentInteractable { get; private set; }
 
@@ -33,6 +40,8 @@ namespace Spookline.SPC.Interaction {
         public bool IsProcessingInteraction => ActiveInteractable != null;
 
         public IReadOnlyList<Interactable> RegisteredInteractables => _interactables;
+
+        public IReadOnlyList<VisibilityRay> VisibilityRays => _visibilityRays;
 
         private void Update() {
             if (!interactionCamera) return;
@@ -165,7 +174,7 @@ namespace Spookline.SPC.Interaction {
             ResetProProcessors(cancelledInteractable);
             ClearActiveInteraction();
 
-            // Interaction cancelled evt
+            new InteractionCancelledEvt { Interactable = cancelledInteractable }.Raise();
         }
 
         private void UpdateActiveInteraction() {
@@ -306,6 +315,7 @@ namespace Spookline.SPC.Interaction {
 
         private Interactable FindClosestProximityInteractable() {
             var origin = interactionCamera.transform.position;
+            _visibilityRays.Clear();
 
             var hits = Physics.OverlapSphereNonAlloc(origin, proximityRadius, _proximityColliders, interactionLayers,
                 triggerInteraction);
@@ -319,6 +329,7 @@ namespace Spookline.SPC.Interaction {
                 if (!_colliderLookup.TryGetValue(nearbyCollider, out Interactable interactable)) continue;
                 if (interactable.type != InteractionType.Proximity) continue;
                 if (!_checkedInteractables.Add(interactable)) continue;
+                if (!HasVisibilityTo(interactable, origin)) continue;
                 var interactableDistanceSquared = GetClosestDistanceSquared(interactable, origin);
                 if (interactableDistanceSquared >= closestDistanceSquared) continue;
                 closestDistanceSquared = interactableDistanceSquared;
@@ -326,6 +337,29 @@ namespace Spookline.SPC.Interaction {
             }
 
             return closestInteractable != null && closestInteractable.isActive() ? closestInteractable : null;
+        }
+
+        private bool HasVisibilityTo(Interactable interactable, Vector3 origin) {
+            if (interactable?.colliders == null) return false;
+
+            foreach (var collider in interactable.colliders) {
+                if (!collider || !collider.enabled || !collider.gameObject.activeInHierarchy) continue;
+
+                var closestPoint = collider.ClosestPoint(origin);
+                var direction = closestPoint - origin;
+                var distance = direction.magnitude;
+                if (distance <= Mathf.Epsilon) {
+                    _visibilityRays.Add(new VisibilityRay { origin = origin, target = closestPoint, isVisible = true });
+                    return true;
+                }
+
+                var isVisible = Physics.Raycast(origin, direction / distance, out var hit, distance, interactionLayers,
+                    QueryTriggerInteraction.Ignore) && interactable.ContainsCollider(hit.collider);
+                _visibilityRays.Add(new VisibilityRay { origin = origin, target = closestPoint, isVisible = isVisible });
+                if (isVisible) return true;
+            }
+
+            return false;
         }
 
         private static float GetClosestDistanceSquared(Interactable interactable, Vector3 origin) {
@@ -355,6 +389,12 @@ public struct InteractEvt : Evt<InteractEvt> {
 }
 
 public struct InteractionTargetChangedEvt : Evt<InteractionTargetChangedEvt> {
+
+    public Interactable Interactable { get; set; }
+
+}
+
+public struct InteractionCancelledEvt : Evt<InteractionCancelledEvt> {
 
     public Interactable Interactable { get; set; }
 
