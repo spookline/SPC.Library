@@ -6,11 +6,25 @@ namespace Spookline.SPC.Interaction {
 
         private InteractionManager _interactionManager;
 
+        [SerializeField] private bool drawWhenNotSelected;
+
         private void Awake() {
             _interactionManager = GetComponent<InteractionManager>();
         }
 
+        private void OnDrawGizmos() {
+            if (drawWhenNotSelected) DrawGizmos();
+        }
+
         private void OnDrawGizmosSelected() {
+            if (!drawWhenNotSelected) DrawGizmos();
+        }
+
+        private void DrawGizmos() {
+            if (!_interactionManager) {
+                _interactionManager = GetComponent<InteractionManager>();
+            }
+
             if (!_interactionManager || !_interactionManager.interactionCamera) return;
 
             var cameraTransform = _interactionManager.interactionCamera.transform;
