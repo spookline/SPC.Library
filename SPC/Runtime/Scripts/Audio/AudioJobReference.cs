@@ -1,36 +1,53 @@
 using System;
 using System.Threading;
 using Cysharp.Threading.Tasks;
-using UnityEngine;
 
 namespace Spookline.SPC.Audio {
-    public class AudioJobReference : IDisposable {
+    /// <summary>Lifetime token for a pending or active audio job.</summary>
+    public sealed class AudioJobReference : IDisposable {
 
         public AudioHandle handle;
         public AudioJob job;
+
         internal AudioJobReferenceState state = AudioJobReferenceState.Uninitialized;
 
+        private CancellationTokenRegistration _registration;
+        private UniTaskCompletionSource _readySource;
+
+        public AudioJobReferenceState State => state;
         public bool IsValid => handle && handle.IsOwnedBy(this);
         public bool IsPlaying => IsValid && handle.IsPlaying;
+        public bool IsPending => state == AudioJobReferenceState.Pending;
 
-        public bool IsPending => state == AudioJobReferenceState.Pending ||
-                                 (state == AudioJobReferenceState.Ready && !handle.HasEnded);
-
-
-        private CancellationTokenRegistration _registration;
-
-        /// <summary>
-        ///     Fully disposes this job reference even if it is still pending.
-        /// </summary>
         public void Dispose() {
             if (state == AudioJobReferenceState.Killed) return;
             state = AudioJobReferenceState.Killed;
             _registration.Dispose();
+            _readySource?.TrySetResult();
             if (!IsValid) return;
-            Stop();
-            if (!handle.IsReleased)
+
+            if (!handle.HasEnded) handle.EndNow();
+            if (handle && !handle.IsReleased && AudioManager.IsInitialized)
                 AudioManager.Instance.Release(handle);
-            else Debug.LogWarning($"Handle {handle.GetEntityId()} already released.");
+        }
+
+        internal void MarkPending() {
+            state = AudioJobReferenceState.Pending;
+            _readySource = new UniTaskCompletionSource();
+        }
+
+        internal void MarkReady(AudioHandle leasedHandle, CancellationToken token) {
+            if (state != AudioJobReferenceState.Pending) return;
+            handle = leasedHandle;
+            state = AudioJobReferenceState.Ready;
+            RegisterToken(token);
+            _readySource?.TrySetResult();
+        }
+
+        internal void MarkFailed() {
+            if (state == AudioJobReferenceState.Killed) return;
+            state = AudioJobReferenceState.Failed;
+            _readySource?.TrySetResult();
         }
 
         internal void RegisterToken(CancellationToken token) {
@@ -40,21 +57,26 @@ namespace Spookline.SPC.Audio {
                 return;
             }
 
-            if (token.CanBeCanceled) {
-                _registration = token.RegisterWithoutCaptureExecutionContext(r => ((AudioJobReference)r).Dispose(), this);
-            }
+            if (token.CanBeCanceled)
+                _registration = token.RegisterWithoutCaptureExecutionContext(
+                    value => ((AudioJobReference)value).Dispose(), this);
+        }
+
+        public async UniTask WaitUntilReady(CancellationToken cancellationToken = default) {
+            if (state != AudioJobReferenceState.Pending) return;
+            if (_readySource != null)
+                await _readySource.Task.AttachExternalCancellation(cancellationToken);
         }
 
         public async UniTask WaitUntilEnded(CancellationToken cancellationToken = default) {
-            if (!IsValid) return;
-            using var combined = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, 
-                job.cancellationToken);
-            await handle.WaitUntilEnded().AttachExternalCancellation(combined.Token);
+            using var combined = CancellationTokenSource.CreateLinkedTokenSource(
+                cancellationToken, job.cancellationToken);
+            await WaitUntilReady(combined.Token);
+            if (IsValid) await handle.WaitUntilEnded().AttachExternalCancellation(combined.Token);
         }
 
-        /// <summary>
-        ///     Stops a job if it is currently playing.
-        /// </summary>
+        public UniTask.Awaiter GetAwaiter() => WaitUntilEnded().GetAwaiter();
+
         public void Stop() {
             if (IsValid && !handle.HasEnded) handle.EndNow();
         }

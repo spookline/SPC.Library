@@ -1,9 +1,10 @@
-﻿using System;
+using System;
 using System.Threading;
 using Cysharp.Threading.Tasks;
 using UnityEngine;
 
 namespace Spookline.SPC.Audio {
+    /// <summary>An immutable, allocation-free playback request.</summary>
     public readonly struct AudioJob {
 
         public readonly AudioDefinition definition;
@@ -11,21 +12,27 @@ namespace Spookline.SPC.Audio {
         public readonly AudioOptions options;
         public readonly CancellationToken cancellationToken;
 
-        public AudioJob(AudioDefinition definition, int data, AudioOptions options,
-            CancellationToken cancellationToken = default) {
+        public AudioJob(
+            AudioDefinition definition,
+            int data,
+            AudioOptions options,
+            CancellationToken cancellationToken = default
+        ) {
             this.definition = definition;
             this.data = data;
             this.options = options;
             this.cancellationToken = cancellationToken;
         }
 
+        public bool IsValid => definition && definition.provider != null;
+
         public AudioJob WithOptions(AudioOptions newOptions) {
             return new AudioJob(definition, data, newOptions, cancellationToken);
         }
 
         public AudioJob With(Func<AudioOptions, AudioOptions> modifier) {
-            var newOptions = modifier(options);
-            return new AudioJob(definition, data, newOptions, cancellationToken);
+            if (modifier == null) throw new ArgumentNullException(nameof(modifier));
+            return WithOptions(modifier(options));
         }
 
         public AudioJob WithToken(CancellationToken token) {
@@ -33,6 +40,7 @@ namespace Spookline.SPC.Audio {
         }
 
         public SerializedAudioJob Serialize() {
+            if (!definition) throw new InvalidOperationException("Cannot serialize an invalid audio job.");
             return new SerializedAudioJob {
                 guid = definition.assetGuid,
                 data = data,
@@ -70,26 +78,20 @@ namespace Spookline.SPC.Audio {
             return reference;
         }
 
-        public AudioJobReference PlayTracked(Transform transform) {
+        public AudioJobReference PlayTracked(Transform target) {
             var reference = PreparePendingReference();
-            SpookAudioModule.Instance.Play(reference, transform, cancellationToken).Forget();
+            SpookAudioModule.Instance.Play(reference, target, cancellationToken).Forget();
             return reference;
         }
 
-        public AudioClip GetClip() {
-            return SpookAudioModule.Instance.GetClip(this);
-        }
+        public AudioClip GetClip() => SpookAudioModule.Instance.GetClip(this);
+
+        public AudioJobReference CreateNewReference() => new() { job = this };
 
         private AudioJobReference PreparePendingReference() {
             var reference = CreateNewReference();
-            reference.state = AudioJobReferenceState.Pending;
+            reference.MarkPending();
             return reference;
-        }
-
-        public AudioJobReference CreateNewReference() {
-            return new AudioJobReference {
-                job = this
-            };
         }
 
     }

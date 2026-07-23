@@ -3,154 +3,190 @@ using Cysharp.Threading.Tasks;
 using UnityEngine;
 
 namespace Spookline.SPC.Audio {
-    public class AudioHandle : MonoBehaviour {
+    /// <summary>A pooled runtime voice. Instances are owned by <see cref="AudioManager"/>.</summary>
+    [DisallowMultipleComponent]
+    [RequireComponent(typeof(AudioSource))]
+    public sealed class AudioHandle : MonoBehaviour {
 
         [HideInInspector]
         public AudioSource source;
 
         [HideInInspector]
         public Transform tracked;
-        private bool _hasCalledContinuation;
+
+        public Action onContinuation;
+        public Action onEnd;
 
         private AudioJobReference _jobReference;
         private UniTaskCompletionSource _endedSource;
+        private Transform _cachedTransform;
         private float _targetVolume;
-        private Transform _transform;
-        public Action onContinuation;
-
-        public Action onEnd;
+        private bool _hasCalledContinuation;
 
         public AudioHandleState State { get; private set; }
-
-        public bool IsPlaying => source.isPlaying;
-        public bool HasEnded => State is AudioHandleState.Ended or AudioHandleState.Released;
-        public bool KeepAlive { get; set; }
-
-        public bool IsReleased => State == AudioHandleState.Released || _jobReference == null;
         public AudioFadeController Fades { get; } = new();
+        public bool KeepAlive { get; set; }
+        public bool IsPlaying => source && source.isPlaying;
+        public bool HasEnded => State is AudioHandleState.Ended or AudioHandleState.Released;
+        public bool IsReleased => State == AudioHandleState.Released || _jobReference == null;
+        internal AudioJob Job => _jobReference?.job ?? default;
 
         private void Awake() {
-            _transform = transform;
+            _cachedTransform = transform;
             source = GetComponent<AudioSource>();
         }
 
-
         private void Update() {
-            if (State == AudioHandleState.Released) return;
+            if (State is AudioHandleState.Released or AudioHandleState.Idle or
+                AudioHandleState.Ended or AudioHandleState.Paused) return;
             if (_jobReference is { IsValid: false }) {
                 Kill();
                 return;
             }
 
-            if (tracked) _transform.position = tracked.position;
-            switch (State) {
-                case AudioHandleState.Ended:
-                case AudioHandleState.Idle:
-                    break;
-                case AudioHandleState.Starting:
+            if (tracked) _cachedTransform.position = tracked.position;
+            else tracked = null;
 
-                    if (source.time > 0 && source.isPlaying) State = AudioHandleState.Playing;
-
-                    break;
-                case AudioHandleState.Playing:
-                    if (!source.isPlaying) {
-                        EndNow();
-                        break;
-                    }
-
-                    Fades.Tick(source.time, source.clip ? source.clip.length : 0f, source);
-
-                    break;
+            if (!source || !source.clip || !source.isPlaying) {
+                EndNow();
+                return;
             }
-        }
 
+            State = AudioHandleState.Playing;
+            var clipLength = source.clip.length;
+            Fades.Tick(source.time, clipLength, source);
+            if (Fades.IsFadeOutActive(source.time, clipLength)) CallContinuation();
+        }
 
         private void OnDestroy() {
-            if (!IsReleased) AudioManager.Instance.Release(this);
+            if (!IsReleased && AudioManager.IsInitialized) AudioManager.Instance.Release(this);
         }
 
-        public void ApplyChanges(AudioJobReference reference) {
-            _targetVolume = source.volume;
-            Fades.Reset(_targetVolume);
+        internal void Assign(AudioJobReference reference) {
             _jobReference = reference;
             _endedSource = new UniTaskCompletionSource();
+            _hasCalledContinuation = false;
             State = AudioHandleState.Idle;
+            CaptureSourceSettings();
         }
 
-        public void ReleaseCallback() {
+        internal void CaptureSourceSettings() {
+            _targetVolume = source ? source.volume : 1f;
+            Fades.Reset(_targetVolume);
+        }
+
+        internal void SetVolume(float volume) {
+            _targetVolume = Mathf.Clamp01(volume);
+            Fades.SetTargetVolume(_targetVolume);
+            if (source) source.volume = _targetVolume;
+        }
+
+        internal void ResetForPool() {
+            if (source) {
+                source.Stop();
+                source.clip = null;
+                source.outputAudioMixerGroup = null;
+                source.loop = false;
+                source.mute = false;
+                source.bypassEffects = false;
+                source.bypassListenerEffects = false;
+                source.bypassReverbZones = false;
+                AudioOptions.Default.ApplyTo(source);
+                source.spatialBlend = 0f;
+                source.spatialize = false;
+            }
+
             _jobReference = null;
             State = AudioHandleState.Released;
             Fades.Reset(1f);
+            tracked = null;
+            KeepAlive = false;
+            _hasCalledContinuation = false;
             onEnd = null;
             onContinuation = null;
-            source.clip = null;
-            source.spatialize = false;
-            source.spatialBlend = 0f;
-            tracked = null;
-            _hasCalledContinuation = false;
             _endedSource?.TrySetResult();
             _endedSource = null;
-            KeepAlive = false;
         }
-
 
         public bool IsOwnedBy(AudioJobReference reference) {
-            return _jobReference != null && _jobReference.Equals(reference);
+            return _jobReference != null && ReferenceEquals(_jobReference, reference);
         }
-
 
         public async UniTask WaitUntilEnded() {
             if (HasEnded) return;
             if (_endedSource != null) await _endedSource.Task;
         }
 
-        public UniTask.Awaiter GetAwaiter() {
-            return WaitUntilEnded().GetAwaiter();
-        }
+        public UniTask.Awaiter GetAwaiter() => WaitUntilEnded().GetAwaiter();
 
         public void EndNow() {
             if (HasEnded) return;
 
-            source.Stop();
+            if (source) source.Stop();
             State = AudioHandleState.Ended;
-
             onEnd?.Invoke();
             _endedSource?.TrySetResult();
             CallContinuation();
-            if (KeepAlive)
+
+            if (KeepAlive) {
                 State = AudioHandleState.Idle;
-            else if (!IsReleased) AudioManager.Instance.Release(this);
+                return;
+            }
+
+            if (!IsReleased && AudioManager.IsInitialized) AudioManager.Instance.Release(this);
         }
 
         public void Kill() {
-            if (!IsReleased) AudioManager.Instance.Release(this);
+            if (!IsReleased && AudioManager.IsInitialized) AudioManager.Instance.Release(this);
+        }
+
+        public void Pause() {
+            if (!source || State is not (AudioHandleState.Starting or AudioHandleState.Playing)) return;
+            source.Pause();
+            State = AudioHandleState.Paused;
+        }
+
+        public void Resume() {
+            if (!source || State != AudioHandleState.Paused) return;
+            source.UnPause();
+            State = AudioHandleState.Playing;
+        }
+
+        public void Play(Vector3 position) {
+            _cachedTransform.position = position;
+            tracked = null;
+            PrepareStart();
+        }
+
+        public void PlayTracked(Transform target) {
+            if (!target) {
+                Play(Vector3.zero);
+                return;
+            }
+
+            tracked = target;
+            _cachedTransform.position = target.position;
+            PrepareStart();
+        }
+
+        private void PrepareStart() {
+            if (!source || !source.clip) {
+                Debug.LogError("Cannot play an audio handle without a clip.");
+                EndNow();
+                return;
+            }
+
+            _hasCalledContinuation = false;
+            _endedSource = new UniTaskCompletionSource();
+            State = AudioHandleState.Starting;
+            source.volume = _targetVolume;
+            source.Play();
         }
 
         private void CallContinuation() {
             if (_hasCalledContinuation) return;
             _hasCalledContinuation = true;
             onContinuation?.Invoke();
-        }
-
-
-        public void Play(Vector3 position) {
-            _transform.position = position;
-            tracked = null;
-            PrepareStart();
-        }
-
-        public void PlayTracked(Transform tracked) {
-            this.tracked = tracked;
-            _transform.position = tracked.position;
-            PrepareStart();
-        }
-
-        private void PrepareStart() {
-            _hasCalledContinuation = false;
-            State = AudioHandleState.Starting;
-            Fades.Reset(_targetVolume);
-            source.volume = _targetVolume;
-            source.Play();
         }
 
     }
