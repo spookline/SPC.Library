@@ -1,17 +1,18 @@
-﻿using System;
+using System;
 using Sirenix.OdinInspector;
 
 namespace Spookline.SPC.Audio {
     [Serializable]
     [InlineProperty]
-    public class AudioOptionOverride {
+    public sealed class AudioOptionOverride {
 
         [ToggleGroup("hasOverride", "Audio Overrides")]
         public bool hasOverride;
+
         [ToggleGroup("hasOverride")]
         [InlineProperty]
         [HideLabel]
-        public AudioOptions options;
+        public AudioOptions options = AudioOptions.Default;
 
     }
 }

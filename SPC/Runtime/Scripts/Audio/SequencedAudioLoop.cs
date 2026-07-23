@@ -1,8 +1,9 @@
-﻿using System;
-using UnityEngine;
+using System;
 
 namespace Spookline.SPC.Audio {
+    /// <summary>Small ownership wrapper for starting and stopping a prepared loop idempotently.</summary>
     public sealed class SequencedAudioLoop : IDisposable {
+
         private readonly LoopingAudioJob _loop;
         private bool _started;
 
@@ -28,5 +29,6 @@ namespace Spookline.SPC.Audio {
             Stop();
             _loop.Dispose();
         }
+
     }
 }

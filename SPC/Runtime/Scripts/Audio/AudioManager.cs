@@ -1,43 +1,70 @@
-﻿using System.Collections.Generic;
+using System;
+using System.Collections.Generic;
 using Spookline.SPC.Audio.Events;
 using Spookline.SPC.Events;
 using Spookline.SPC.Ext;
 using UnityEngine;
-using UnityEngine.AddressableAssets;
 using UnityEngine.Audio;
 using UnityEngine.Pool;
 using Object = UnityEngine.Object;
 
 namespace Spookline.SPC.Audio {
-    /// <summary>
-    ///     Manages the playback and control of audio within the application.
-    ///     Provides methods for playing audio clips at specific positions or tracking transforms,
-    ///     while optimally managing resources through object pooling of audio sources.
-    /// </summary>
-    public class AudioManager : Singleton<AudioManager> {
+    /// <summary>Owns pooled AudioSources and dispatches optional integration callbacks.</summary>
+    public sealed class AudioManager : Singleton<AudioManager> {
 
-        private readonly Dictionary<string, AudioClip> _clips = new();
-        private IReadOnlyList<AudioGlobalPlugin> _globalPlugins = System.Array.Empty<AudioGlobalPlugin>();
-
+        private IReadOnlyList<AudioGlobalPlugin> _globalPlugins = Array.Empty<AudioGlobalPlugin>();
         private AudioMixer _mixer;
         private ObjectPool<AudioHandle> _pool;
         private Transform _poolParent;
+        private bool _shuttingDown;
+        private int _initialCapacity;
 
-        public AudioManager() {
-            if (IsInitialized) return;
+        public AudioMixer Mixer => _mixer ??= SpookAudioModule.HasInstance ? SpookAudioModule.Instance.mixer : null;
+        public Transform PoolRoot => _poolParent;
+        public int CountActive => _pool?.CountActive ?? 0;
+        public int CountInactive => _pool?.CountInactive ?? 0;
+        public int CountAll => _pool?.CountAll ?? 0;
+
+        internal void Initialize(int initialCapacity, int maxPoolSize) {
+            Shutdown();
+            _shuttingDown = false;
+
+            var capacity = Mathf.Max(0, initialCapacity);
+            var maximum = Mathf.Max(1, maxPoolSize);
+            capacity = Mathf.Min(capacity, maximum);
+            _initialCapacity = capacity;
+
+            var poolObject = new GameObject("[SPC] Audio Source Pool");
+            Object.DontDestroyOnLoad(poolObject);
+            _poolParent = poolObject.transform;
+            _pool = new ObjectPool<AudioHandle>(
+                OnPoolCreate,
+                OnPoolGet,
+                OnPoolRelease,
+                OnPoolDestroy,
+                true,
+                capacity,
+                maximum);
         }
 
-        public AudioMixer Mixer => _mixer ??= SpookAudioModule.Instance.mixer;
+        internal void WarmPool() {
+            if (_pool == null || _initialCapacity == 0) return;
+            var warmup = new AudioHandle[_initialCapacity];
+            for (var i = 0; i < warmup.Length; i++) warmup[i] = _pool.Get();
+            for (var i = 0; i < warmup.Length; i++) _pool.Release(warmup[i]);
+        }
 
-        internal void Initialize(int cacheSize) {
+        internal void Shutdown() {
+            if (_shuttingDown) return;
+            _shuttingDown = true;
             _pool?.Dispose();
-            if (_poolParent != null) Object.Destroy(_poolParent.gameObject);
-            _pool = new ObjectPool<AudioHandle>(OnPoolCreate, OnPoolGet, OnPoolRelease, OnPoolDestroy,
-                maxSize: Mathf.Max(1, cacheSize));
+            _pool = null;
+            _globalPlugins = Array.Empty<AudioGlobalPlugin>();
+            _mixer = null;
+            _initialCapacity = 0;
 
-            var poolParentObject = new GameObject("AudioSourcePool");
-            Object.DontDestroyOnLoad(poolParentObject);
-            _poolParent = poolParentObject.transform;
+            if (_poolParent) Object.Destroy(_poolParent.gameObject);
+            _poolParent = null;
         }
 
         internal void ClearAudioPool() {
@@ -45,65 +72,38 @@ namespace Spookline.SPC.Audio {
         }
 
         internal void SetGlobalPlugins(IReadOnlyList<AudioGlobalPlugin> plugins) {
-            _globalPlugins = plugins ?? System.Array.Empty<AudioGlobalPlugin>();
+            _globalPlugins = plugins ?? Array.Empty<AudioGlobalPlugin>();
         }
 
-        /// <summary>
-        ///     Generates a range of audio paths based on a prefix and an amount.
-        /// </summary>
-        /// <param name="prefix"></param>
-        /// <param name="amount"></param>
-        /// <returns></returns>
-        public static string[] GenerateRangedPaths(string prefix, int amount) {
-            var paths = new string[amount];
-            for (var i = 0; i < amount; i++) paths[i] = $"{prefix}_{i + 1}";
-            return paths;
+        internal AudioHandle Lease(AudioJob job) {
+            if (_pool == null) throw new InvalidOperationException("The audio pool has not been initialized.");
+            var handle = _pool.Get();
+            InvokePlugins(plugin => plugin.OnHandleLeased(handle, job));
+            return handle;
         }
 
-        /// <summary>
-        ///     Change mixer group volume
-        /// </summary>
-        /// <param name="param">e.g MasterVolume, SfxVolume</param>
-        /// <param name="value">Percentage</param>
-        public void ChangeMixerVolume(string param, float value) {
-            if (value <= 0) {
-                Mixer.SetFloat(param, -80f);
-                return;
-            }
-
-            Mixer.SetFloat(param, Mathf.Log10(value) * 20f);
+        internal void BeforePlay(AudioHandle handle, AudioJob job) {
+            InvokePlugins(plugin => plugin.OnBeforePlay(handle, job));
         }
-
-        internal AudioClip GetClip(string asset) {
-            if (!_clips.ContainsKey(asset))
-                _clips[asset] = Addressables.LoadAssetAsync<AudioClip>(asset).WaitForCompletion();
-
-            return _clips[asset];
-        }
-
-        internal AudioHandle Lease() {
-            if (_pool == null) Initialize(10);
-            return _pool?.Get();
-        }
-
 
         internal void Release(AudioHandle handle) {
-            if (handle && _pool != null) _pool.Release(handle);
+            if (!handle || _pool == null || _shuttingDown || handle.IsReleased) return;
+            _pool.Release(handle);
+        }
+        
+        public bool ChangeMixerVolume(string parameter, float linearVolume) {
+            if (!Mixer || string.IsNullOrWhiteSpace(parameter)) return false;
+            var decibels = linearVolume <= 0.0001f ? -80f : Mathf.Log10(Mathf.Clamp01(linearVolume)) * 20f;
+            return Mixer.SetFloat(parameter, decibels);
         }
 
-        #region Pool Callbacks
-
-        private static AudioHandle OnPoolCreate() {
-            var sourceObject = new GameObject("PooledAudioSource");
-            sourceObject.transform.SetParent(Instance._poolParent, true);
+        private AudioHandle OnPoolCreate() {
+            var sourceObject = new GameObject("Pooled Audio Source");
+            sourceObject.transform.SetParent(_poolParent, false);
             sourceObject.AddComponent<AudioSource>();
             var handle = sourceObject.AddComponent<AudioHandle>();
-            new AudioHandleCreatedEvt {
-                SourceObject = sourceObject,
-                Handle = handle
-            }.Raise();
-            foreach (var plugin in Instance._globalPlugins)
-                if (plugin != null) plugin.OnHandleCreated(handle);
+            new AudioHandleCreatedEvt { SourceObject = sourceObject, Handle = handle }.Raise();
+            InvokePlugins(plugin => plugin.OnHandleCreated(handle));
             return handle;
         }
 
@@ -111,22 +111,30 @@ namespace Spookline.SPC.Audio {
             handle.gameObject.SetActive(true);
         }
 
-        private static void OnPoolRelease(AudioHandle handle) {
-            foreach (var plugin in Instance._globalPlugins)
-                if (plugin) plugin.OnHandleReleased(handle);
-            handle.ReleaseCallback();
+        private void OnPoolRelease(AudioHandle handle) {
+            InvokePlugins(plugin => plugin.OnHandleReleased(handle));
+            handle.ResetForPool();
             handle.gameObject.SetActive(false);
+            handle.transform.SetParent(_poolParent, false);
         }
 
-        private static void OnPoolDestroy(AudioHandle handle) {
-            new AudioHandleDestroyedEvt {
-                SourceObject = handle.gameObject,
-                Handle = handle
-            }.Raise();
+        private void OnPoolDestroy(AudioHandle handle) {
+            if (!handle) return;
+            InvokePlugins(plugin => plugin.OnHandleDestroyed(handle));
+            new AudioHandleDestroyedEvt { SourceObject = handle.gameObject, Handle = handle }.Raise();
             Object.Destroy(handle.gameObject);
         }
 
-        #endregion
+        private void InvokePlugins(Action<AudioGlobalPlugin> callback) {
+            foreach (var plugin in _globalPlugins) {
+                if (!plugin) continue;
+                try {
+                    callback(plugin);
+                } catch (Exception exception) {
+                    Debug.LogException(exception, plugin);
+                }
+            }
+        }
 
     }
 }

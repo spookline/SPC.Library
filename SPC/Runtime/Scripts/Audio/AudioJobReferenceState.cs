@@ -1,4 +1,4 @@
-﻿namespace Spookline.SPC.Audio {
+namespace Spookline.SPC.Audio {
     public enum AudioJobReferenceState {
 
         Killed = -2,

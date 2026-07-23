@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 
 namespace Spookline.SPC.Audio {
     public enum AudioFadeCurve {
@@ -8,6 +8,7 @@ namespace Spookline.SPC.Audio {
     }
 
     public readonly struct AudioFade {
+
         public readonly float duration;
         public readonly AudioFadeCurve curve;
 
@@ -25,5 +26,6 @@ namespace Spookline.SPC.Audio {
                 _ => t * t * (3f - 2f * t)
             };
         }
+
     }
 }
