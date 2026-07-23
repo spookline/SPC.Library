@@ -17,6 +17,7 @@ namespace Spookline.SPC.Audio {
     public class AudioManager : Singleton<AudioManager> {
 
         private readonly Dictionary<string, AudioClip> _clips = new();
+        private IReadOnlyList<AudioGlobalPlugin> _globalPlugins = System.Array.Empty<AudioGlobalPlugin>();
 
         private AudioMixer _mixer;
         private ObjectPool<AudioHandle> _pool;
@@ -30,8 +31,9 @@ namespace Spookline.SPC.Audio {
 
         internal void Initialize(int cacheSize) {
             _pool?.Dispose();
+            if (_poolParent != null) Object.Destroy(_poolParent.gameObject);
             _pool = new ObjectPool<AudioHandle>(OnPoolCreate, OnPoolGet, OnPoolRelease, OnPoolDestroy,
-                maxSize: cacheSize);
+                maxSize: Mathf.Max(1, cacheSize));
 
             var poolParentObject = new GameObject("AudioSourcePool");
             Object.DontDestroyOnLoad(poolParentObject);
@@ -39,7 +41,11 @@ namespace Spookline.SPC.Audio {
         }
 
         internal void ClearAudioPool() {
-            _pool.Clear();
+            _pool?.Clear();
+        }
+
+        internal void SetGlobalPlugins(IReadOnlyList<AudioGlobalPlugin> plugins) {
+            _globalPlugins = plugins ?? System.Array.Empty<AudioGlobalPlugin>();
         }
 
         /// <summary>
@@ -76,12 +82,13 @@ namespace Spookline.SPC.Audio {
         }
 
         internal AudioHandle Lease() {
-            return _pool.Get();
+            if (_pool == null) Initialize(10);
+            return _pool?.Get();
         }
 
 
         internal void Release(AudioHandle handle) {
-            _pool.Release(handle);
+            if (handle && _pool != null) _pool.Release(handle);
         }
 
         #region Pool Callbacks
@@ -95,6 +102,8 @@ namespace Spookline.SPC.Audio {
                 SourceObject = sourceObject,
                 Handle = handle
             }.Raise();
+            foreach (var plugin in Instance._globalPlugins)
+                if (plugin != null) plugin.OnHandleCreated(handle);
             return handle;
         }
 
@@ -103,6 +112,8 @@ namespace Spookline.SPC.Audio {
         }
 
         private static void OnPoolRelease(AudioHandle handle) {
+            foreach (var plugin in Instance._globalPlugins)
+                if (plugin) plugin.OnHandleReleased(handle);
             handle.ReleaseCallback();
             handle.gameObject.SetActive(false);
         }

@@ -10,20 +10,10 @@ namespace Spookline.SPC.Audio {
 
         [HideInInspector]
         public Transform tracked;
-        private bool _fadeIn;
-        private float _fadeInEnd;
-
-        private float _fadeInStart;
-        private bool _fadeOut;
-        private float _fadeOutEnd;
-
-        private float _fadeOutStart;
         private bool _hasCalledContinuation;
 
         private AudioJobReference _jobReference;
-        private bool _startedFadeIn;
-        private bool _startedFadeOut;
-
+        private UniTaskCompletionSource _endedSource;
         private float _targetVolume;
         private Transform _transform;
         public Action onContinuation;
@@ -37,6 +27,7 @@ namespace Spookline.SPC.Audio {
         public bool KeepAlive { get; set; }
 
         public bool IsReleased => State == AudioHandleState.Released || _jobReference == null;
+        public AudioFadeController Fades { get; } = new();
 
         private void Awake() {
             _transform = transform;
@@ -60,8 +51,6 @@ namespace Spookline.SPC.Audio {
 
                     if (source.time > 0 && source.isPlaying) State = AudioHandleState.Playing;
 
-                    if (_fadeIn) source.volume = 0;
-
                     break;
                 case AudioHandleState.Playing:
                     if (!source.isPlaying) {
@@ -69,44 +58,7 @@ namespace Spookline.SPC.Audio {
                         break;
                     }
 
-                    var time = source.time;
-                    float controlVolume = -1;
-                    if (_fadeIn) {
-                        if (time >= _fadeInStart && time <= _fadeInEnd) {
-                            if (!_startedFadeIn) {
-                                _startedFadeIn = true;
-                                controlVolume = 0;
-                            } else {
-                                var t = (time - _fadeInStart) / (_fadeInEnd - _fadeInStart);
-                                controlVolume = _targetVolume * t;
-                            }
-                        } else if (time >= _fadeInStart && time < _fadeInEnd) {
-                            controlVolume = _targetVolume;
-                            _fadeIn = false;
-                            _startedFadeIn = false;
-                        }
-                    }
-
-                    if (_fadeOut) {
-                        if (time >= _fadeOutStart && time <= _fadeOutEnd) {
-                            if (!_startedFadeOut) {
-                                _startedFadeOut = true;
-                                controlVolume = _targetVolume;
-                                CallContinuation();
-                            } else {
-                                var t = (time - _fadeOutStart) / (_fadeOutEnd - _fadeOutStart);
-                                controlVolume = _targetVolume * (1f - t);
-                            }
-                        } else if (time >= _fadeOutStart && time < _fadeOutEnd) {
-                            controlVolume = 0f;
-                            EndNow();
-                        }
-                    }
-
-                    if (controlVolume >= 0) {
-                        var curvedVolume = Mathf.Log10(controlVolume * 100f + 1f) / 2f;
-                        source.volume = curvedVolume;
-                    }
+                    Fades.Tick(source.time, source.clip ? source.clip.length : 0f, source);
 
                     break;
             }
@@ -119,17 +71,16 @@ namespace Spookline.SPC.Audio {
 
         public void ApplyChanges(AudioJobReference reference) {
             _targetVolume = source.volume;
+            Fades.Reset(_targetVolume);
             _jobReference = reference;
+            _endedSource = new UniTaskCompletionSource();
             State = AudioHandleState.Idle;
         }
 
         public void ReleaseCallback() {
             _jobReference = null;
             State = AudioHandleState.Released;
-            _fadeOut = false;
-            _fadeIn = false;
-            _startedFadeIn = false;
-            _startedFadeOut = false;
+            Fades.Reset(1f);
             onEnd = null;
             onContinuation = null;
             source.clip = null;
@@ -137,6 +88,8 @@ namespace Spookline.SPC.Audio {
             source.spatialBlend = 0f;
             tracked = null;
             _hasCalledContinuation = false;
+            _endedSource?.TrySetResult();
+            _endedSource = null;
             KeepAlive = false;
         }
 
@@ -145,35 +98,14 @@ namespace Spookline.SPC.Audio {
             return _jobReference != null && _jobReference.Equals(reference);
         }
 
-        public void ImmediateFadeOut(float duration) {
-            var time = source.time;
-            var endTime = Mathf.Min(time + duration, source.clip.length);
-            _fadeOutStart = time;
-            _fadeOutEnd = endTime;
-            _fadeOut = true;
-        }
-
-        public void SetFadeIn(float duration) {
-            _fadeInStart = 0f;
-            _fadeInEnd = duration;
-            _fadeIn = true;
-        }
-
-        public void SetFadeOut(float duration) {
-            if (!source) {
-                _fadeOut = false;
-                return;
-            }
-            _fadeOutStart = source.clip.length - duration;
-            _fadeOutEnd = source.clip.length;
-            _fadeOut = true;
-        }
 
         public async UniTask WaitUntilEnded() {
             if (HasEnded) return;
-            var tcs = new UniTaskCompletionSource();
-            onEnd += () => tcs.TrySetResult();
-            await tcs.Task;
+            if (_endedSource != null) await _endedSource.Task;
+        }
+
+        public UniTask.Awaiter GetAwaiter() {
+            return WaitUntilEnded().GetAwaiter();
         }
 
         public void EndNow() {
@@ -181,10 +113,9 @@ namespace Spookline.SPC.Audio {
 
             source.Stop();
             State = AudioHandleState.Ended;
-            _startedFadeIn = false;
-            _startedFadeOut = false;
 
             onEnd?.Invoke();
+            _endedSource?.TrySetResult();
             CallContinuation();
             if (KeepAlive)
                 State = AudioHandleState.Idle;
@@ -215,11 +146,9 @@ namespace Spookline.SPC.Audio {
         }
 
         private void PrepareStart() {
-            _startedFadeIn = false;
-            _startedFadeOut = false;
             _hasCalledContinuation = false;
             State = AudioHandleState.Starting;
-            if (_fadeIn) source.volume = 0f;
+            Fades.Reset(_targetVolume);
             source.Play();
         }
 

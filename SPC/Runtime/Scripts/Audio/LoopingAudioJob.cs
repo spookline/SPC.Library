@@ -100,8 +100,8 @@ namespace Spookline.SPC.Audio {
             var reference = _cycle[index];
             var handle = reference.handle;
             if (crossfadeDuration > 0) {
-                handle.SetFadeIn(crossfadeDuration);
-                handle.SetFadeOut(crossfadeDuration);
+                handle.Fades.FadeIn(crossfadeDuration);
+                handle.Fades.FadeOut(crossfadeDuration);
             }
 
             if (tracked) {

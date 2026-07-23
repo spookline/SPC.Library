@@ -76,36 +76,8 @@ namespace Spookline.SPC.Audio {
             return reference;
         }
 
-        /// <summary>
-        ///     Plays the audio job and waits until it finishes playing.
-        /// </summary>
-        /// <returns>
-        ///     A UniTask that completes when the audio job finishes playing, returning the reference.
-        /// </returns>
-        public async UniTask<AudioJobReference> PlayAndAwait() {
-            return await SpookAudioModule.Instance.PlayAndAwait(PreparePendingReference(), cancellationToken);
-        }
-
-        /// <summary>
-        ///     Plays the audio job at the specified position and waits until it finishes playing.
-        /// </summary>
-        /// <param name="position">The world position where the audio should play.</param>
-        /// <returns>A UniTask that completes once the audio playback has finished, returning the reference.</returns>
-        public async UniTask<AudioJobReference> PlayAndAwaitAt(Vector3 position) {
-            return await SpookAudioModule.Instance.PlayAndAwait(PreparePendingReference(), position, cancellationToken);
-        }
-
-        /// <summary>
-        ///     Plays the audio job tracked to the specified transform and asynchronously waits until it finishes playing.
-        /// </summary>
-        /// <param name="transform">The transform to which the audio playback will be tracked.</param>
-        /// <returns>A UniTask that completes when the audio playback is finished, returning the reference.</returns>
-        public async UniTask<AudioJobReference> PlayAndAwaitTracked(Transform transform) {
-            return await SpookAudioModule.Instance.PlayAndAwait(PreparePendingReference(), transform, cancellationToken);
-        }
-
-        public UniTask<AudioClip> GetClipAsync() {
-            return SpookAudioModule.Instance.GetClip(this, cancellationToken);
+        public AudioClip GetClip() {
+            return SpookAudioModule.Instance.GetClip(this);
         }
 
         private AudioJobReference PreparePendingReference() {

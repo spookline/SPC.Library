@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using Cysharp.Threading.Tasks;
 using Sirenix.OdinInspector;
@@ -18,6 +20,7 @@ namespace Spookline.SPC.Audio {
         public Type lookupEnum;
 
         public AnimationCurve curve;
+        [SerializeField] private List<AudioGlobalPlugin> globalPlugins = new();
         public static UniTask Ready => UniTask.WaitUntil(() => HasInstance && Instance.ready);
 
         public override void Load() {
@@ -33,21 +36,36 @@ namespace Spookline.SPC.Audio {
         private async UniTask OnGlobalStart(GlobalStartEvt arg) {
             await SpookAudioRegistry.Instance.Load(lookupEnum);
             AudioManager.Instance.Initialize(audioCacheSize);
+            await InitializePlugins();
+            AudioManager.Instance.SetGlobalPlugins(globalPlugins);
             ready = true;
         }
+
+        public async UniTask ShutdownPlugins() {
+            if (!HasInstance) return;
+            var context = new AudioPluginContext(AudioManager.Instance, mixer);
+            for (var i = globalPlugins.Count - 1; i >= 0; i--) {
+                var plugin = globalPlugins[i];
+                if (plugin != null) await plugin.Shutdown(context);
+            }
+            AudioManager.Instance.SetGlobalPlugins(null);
+            ready = false;
+        }
+
+        private async UniTask InitializePlugins() {
+            var context = new AudioPluginContext(AudioManager.Instance, mixer);
+            foreach (var plugin in globalPlugins.Where(plugin => plugin != null).OrderBy(plugin => plugin.order))
+                await plugin.Initialize(context);
+        }
+
+
 
         public AudioJob CreateJob(AudioDefinition definition, CancellationToken cancellationToken = default) {
             return definition.provider.CreateJob(definition, cancellationToken);
         }
 
-        private async UniTask Prepare(AudioDefinition definition, CancellationToken cancellationToken = default) {
-            if (!definition.provider.IsLoaded) await definition.provider.Load().AttachExternalCancellation(cancellationToken);
-            else await UniTask.Yield();
-        }
-
         private async UniTask Lease(AudioJobReference reference, CancellationToken cancellationToken = default) {
             var job = reference.job;
-            await Prepare(job.definition, cancellationToken);
             if (!reference.IsPending) return;
             var handle = AudioManager.Instance.Lease();
             handle.source.outputAudioMixerGroup = job.definition.group;
@@ -88,29 +106,7 @@ namespace Spookline.SPC.Audio {
             await PlayInternal(reference, h => h.PlayTracked(transform), 1f, cancellationToken);
         }
 
-        public async UniTask<AudioJobReference> PlayAndAwait(AudioJobReference reference,
-            CancellationToken cancellationToken = default) {
-            await Play(reference, cancellationToken);
-            await reference.WaitUntilEnded(cancellationToken);
-            return reference;
-        }
-
-        public async UniTask<AudioJobReference> PlayAndAwait(AudioJobReference reference, Vector3 position,
-            CancellationToken cancellationToken = default) {
-            await Play(reference, position, cancellationToken);
-            await reference.WaitUntilEnded(cancellationToken);
-            return reference;
-        }
-
-        public async UniTask<AudioJobReference> PlayAndAwait(AudioJobReference reference, Transform transform,
-            CancellationToken cancellationToken = default) {
-            await Play(reference, transform, cancellationToken);
-            await reference.WaitUntilEnded(cancellationToken);
-            return reference;
-        }
-
-        public async UniTask<AudioClip> GetClip(AudioJob job, CancellationToken cancellationToken = default) {
-            await Prepare(job.definition, cancellationToken);
+        public AudioClip GetClip(AudioJob job) {
             return job.definition.provider.GetClip(job);
         }
 
