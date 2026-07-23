@@ -41,7 +41,6 @@ namespace Spookline.SPC.Audio {
             return this;
         }
 
-
         public readonly void ApplyTo(AudioSource source) {
             source.volume = volume;
             source.pitch = pitch;
